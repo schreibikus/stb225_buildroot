@@ -1,0 +1,23 @@
+BUILDROOT_VERSION=2018.05.2
+
+all: image
+
+downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2:
+	@mkdir -p downloads
+	cd downloads && wget https://buildroot.org/downloads/buildroot-2018.05.2.tar.bz2
+
+buildroot-$(BUILDROOT_VERSION)/.config:downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2
+	@tar xf downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2
+	@if [ -d overlay ]; then \
+		echo "Copying overlay tree overlay" ; \
+		rsync -arv --exclude='.svn' overlay/ buildroot-$(BUILDROOT_VERSION)/ ; fi
+	@if [ -d patches ]; then \
+		echo "Patching buildroot"; \
+		for PATHFILES in patches/*.patch ; do \
+		    patch -d buildroot-$(BUILDROOT_VERSION) -p1 < $$PATHFILES ; done ; fi
+	@cp configs/buildroot.config buildroot-$(BUILDROOT_VERSION)/.config
+
+image:buildroot-$(BUILDROOT_VERSION)/.config
+	@make -C buildroot-$(BUILDROOT_VERSION)
+	echo "Please find Linux image at buildroot-$(BUILDROOT_VERSION)/output/images/uImage.bin"
+	ls -l buildroot-$(BUILDROOT_VERSION)/output/images/uImage.bin

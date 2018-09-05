@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# Mount All Filesystems
+#
+
+getdevfromname()
+{
+	local temp_device
+	temp_device=`cat /proc/mtd | grep $1`
+	if [ "$temp_device" != "" ]; then
+		temp_device=${temp_device%:*}
+		if [ "$temp_device" != "" ]; then
+			echo -n /dev/$temp_device
+		fi
+	fi
+}
+
+mountnand()
+{
+	local device
+	mkdir -p /mnt/nand
+	device=`getdevfromname Filesystem | sed -e "s@mtd@mtdblock@"`
+	if [ "$device" == "" ]; then
+		echo "Can't find NAND Filesystem :("
+	else
+		echo Mount Filesystem $device
+		mount -t jffs2 $device /mnt/nand
+	fi
+}
+
+case "$1" in
+  start)
+	mountnand
+	mkdir -p /mnt/nand/transmission
+	chown -R transmission:transmission /mnt/nand/transmission
+	mkdir -p /mnt/downloads
+	if [ -f /mnt/nand/fstab ]; then
+		echo "Have external fstab mounting all filesystems"
+		mount -a -T /mnt/nand/fstab
+	fi
+	;;
+  stop)
+	sync
+	;;
+  restart|reload)
+	"$0" stop
+	"$0" start
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit $?
+

@@ -1,0 +1,1 @@
+TRANSMISSION_ARGS="--download-dir /mnt/downloads --config-dir /mnt/nand/transmission"
