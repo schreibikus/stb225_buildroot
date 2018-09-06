@@ -27,17 +27,21 @@ setenv bootcmd 'nand read 0x80800000 Kernel; run setargs; bootm 0x80800000'
 
 saveenv
 
-
 ## Preparation in Linux:
-
 To get access to transmission web interface open /mnt/nand/transmission/settings.json file by vi editor
 and change line from
 
 "rpc-whitelist": "127.0.0.1",
 
-to 
+to
 
 "rpc-whitelist": "127.0.0.1,192.168.*.*",
 
-For mounting USB-flash drive add following line in /mnt/nand/fstab file:
+For mounting FAT USB-flash drive add following line in /mnt/nand/fstab file:
+
 /dev/sda1 /mnt/drive   vfat  iocharset=utf8 0 0
+
+or if you have ext4 USB-Flash:
+
+/dev/sda1 /mnt/drive   ext4  defaults 0 0
+

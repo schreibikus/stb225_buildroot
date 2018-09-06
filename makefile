@@ -4,7 +4,7 @@ all: image
 
 downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2:
 	@mkdir -p downloads
-	cd downloads && wget https://buildroot.org/downloads/buildroot-2018.05.2.tar.bz2
+	cd downloads && wget https://buildroot.org/downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2
 
 buildroot-$(BUILDROOT_VERSION)/.config:downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2
 	@tar xf downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2
@@ -21,3 +21,7 @@ image:buildroot-$(BUILDROOT_VERSION)/.config
 	@make -C buildroot-$(BUILDROOT_VERSION)
 	echo "Please find Linux image at buildroot-$(BUILDROOT_VERSION)/output/images/uImage.bin"
 	ls -l buildroot-$(BUILDROOT_VERSION)/output/images/uImage.bin
+
+config:buildroot-$(BUILDROOT_VERSION)/.config
+	@make -C buildroot-$(BUILDROOT_VERSION) menuconfig
+
