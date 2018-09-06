@@ -39,9 +39,9 @@ to
 
 For mounting FAT USB-flash drive add following line in /mnt/nand/fstab file:
 
-/dev/sda1 /mnt/drive   vfat  iocharset=utf8 0 0
+/dev/sda1 /mnt/downloads   vfat  iocharset=utf8,uid=1000,gid=1000 0 0
 
 or if you have ext4 USB-Flash:
 
-/dev/sda1 /mnt/drive   ext4  defaults 0 0
+/dev/sda1 /mnt/downloads   ext4  defaults 0 0
 
