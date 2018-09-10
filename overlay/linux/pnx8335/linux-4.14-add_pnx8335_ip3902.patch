@@ -799,7 +799,7 @@ diff -Naur linux-4.14.67.orig/drivers/net/ethernet/ip3902.c linux-4.14.67/driver
 + * Internal routine, called with lock held. */
 +static void ip3902_do_handle_interrupt(struct net_device *ndev,	struct ip3902_private *ip3902_priv, unsigned long status)
 +{
-+	int flags;
++	unsigned long flags;
 +
 +	if (status & TX_FINISHED_INT)
 +	{
@@ -970,7 +970,7 @@ diff -Naur linux-4.14.67.orig/drivers/net/ethernet/ip3902.c linux-4.14.67/driver
 +static int ip3902_start_xmit (struct sk_buff *skb, struct net_device *ndev)
 +{
 +	struct ip3902_private *ip3902_priv = (struct ip3902_private*)netdev_priv(ndev);
-+	int flags;
++	unsigned long flags;
 +	int ret;
 +
 +	BUG_ON(netif_queue_stopped(ndev));
