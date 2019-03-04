@@ -1,7 +1,7 @@
-diff -Naur linux-4.14.67.orig/arch/mips/include/asm/mach-generic/kmalloc.h linux-4.14.67/arch/mips/include/asm/mach-generic/kmalloc.h
---- linux-4.14.67.orig/arch/mips/include/asm/mach-generic/kmalloc.h	2018-08-24 14:09:23.000000000 +0300
-+++ linux-4.14.67/arch/mips/include/asm/mach-generic/kmalloc.h	2018-09-04 16:09:26.883401980 +0300
-@@ -8,7 +8,7 @@
+diff -Naur linux-4.19.26.orig/arch/mips/include/asm/mach-generic/kmalloc.h linux-4.19.26/arch/mips/include/asm/mach-generic/kmalloc.h
+--- linux-4.19.26.orig/arch/mips/include/asm/mach-generic/kmalloc.h	2019-02-27 12:09:03.000000000 +0300
++++ linux-4.19.26/arch/mips/include/asm/mach-generic/kmalloc.h	2019-03-04 12:40:11.022829784 +0300
+@@ -7,7 +7,7 @@
   * Total overkill for most systems but need as a safe default.
   * Set this one if any device in the system might do non-coherent DMA.
   */
@@ -10,9 +10,9 @@ diff -Naur linux-4.14.67.orig/arch/mips/include/asm/mach-generic/kmalloc.h linux
  #endif
  
  #endif /* __ASM_MACH_GENERIC_KMALLOC_H */
-diff -Naur linux-4.14.67.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h linux-4.14.67/arch/mips/include/asm/mach-pnx833x/pnx833x.h
---- linux-4.14.67.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2018-08-24 14:09:23.000000000 +0300
-+++ linux-4.14.67/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2018-09-04 16:22:57.972939936 +0300
+diff -Naur linux-4.19.26.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h linux-4.19.26/arch/mips/include/asm/mach-pnx833x/pnx833x.h
+--- linux-4.19.26.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2019-02-27 12:09:03.000000000 +0300
++++ linux-4.19.26/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2019-03-04 12:40:11.022829784 +0300
 @@ -199,4 +199,8 @@
  #define PNX8335_SATA_MODULE_ID_MODULE_ID_SHIFT	16
  #define PNX8335_SATA_MODULE_ID_VALUE		0xA099
@@ -22,10 +22,10 @@ diff -Naur linux-4.14.67.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h linux
 +#define PNX8335_SIF_CPU_OPTIMIZATION_CPU_FREE_SHIFT	0
 +
  #endif
-diff -Naur linux-4.14.67.orig/arch/mips/Kconfig linux-4.14.67/arch/mips/Kconfig
---- linux-4.14.67.orig/arch/mips/Kconfig	2018-08-24 14:09:23.000000000 +0300
-+++ linux-4.14.67/arch/mips/Kconfig	2018-09-04 16:13:31.532334983 +0300
-@@ -1284,6 +1284,8 @@
+diff -Naur linux-4.19.26.orig/arch/mips/Kconfig linux-4.19.26/arch/mips/Kconfig
+--- linux-4.19.26.orig/arch/mips/Kconfig	2019-02-27 12:09:03.000000000 +0300
++++ linux-4.19.26/arch/mips/Kconfig	2019-03-04 12:40:11.026829744 +0300
+@@ -1276,6 +1276,8 @@
  config SOC_PNX8335
  	bool
  	select SOC_PNX833X
@@ -34,9 +34,9 @@ diff -Naur linux-4.14.67.orig/arch/mips/Kconfig linux-4.14.67/arch/mips/Kconfig
  
  config MIPS_SPRAM
  	bool
-diff -Naur linux-4.14.67.orig/arch/mips/pnx833x/common/setup.c linux-4.14.67/arch/mips/pnx833x/common/setup.c
---- linux-4.14.67.orig/arch/mips/pnx833x/common/setup.c	2018-08-24 14:09:23.000000000 +0300
-+++ linux-4.14.67/arch/mips/pnx833x/common/setup.c	2018-09-04 16:19:42.475534113 +0300
+diff -Naur linux-4.19.26.orig/arch/mips/pnx833x/common/setup.c linux-4.19.26/arch/mips/pnx833x/common/setup.c
+--- linux-4.19.26.orig/arch/mips/pnx833x/common/setup.c	2019-02-27 12:09:03.000000000 +0300
++++ linux-4.19.26/arch/mips/pnx833x/common/setup.c	2019-03-04 12:40:11.026829744 +0300
 @@ -38,9 +38,9 @@
  
  int __init plat_mem_setup(void)

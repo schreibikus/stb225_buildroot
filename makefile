@@ -1,4 +1,4 @@
-BUILDROOT_VERSION=2018.11.2
+BUILDROOT_VERSION=2019.02-rc3
 
 all: image
 
@@ -18,7 +18,7 @@ buildroot-$(BUILDROOT_VERSION)/.config:downloads/buildroot-$(BUILDROOT_VERSION).
 	@cp configs/buildroot.config buildroot-$(BUILDROOT_VERSION)/.config
 
 image:buildroot-$(BUILDROOT_VERSION)/.config
-	@make -C buildroot-$(BUILDROOT_VERSION)
+	@LC_ALL=C LANG=C make -C buildroot-$(BUILDROOT_VERSION)
 	echo "Please find Linux image at buildroot-$(BUILDROOT_VERSION)/output/images/uImage.bin"
 	ls -l buildroot-$(BUILDROOT_VERSION)/output/images/uImage.bin
 
