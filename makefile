@@ -1,4 +1,4 @@
-BUILDROOT_VERSION=2019.05.1
+BUILDROOT_VERSION=2019.08
 
 all: image
 
@@ -24,4 +24,3 @@ image:buildroot-$(BUILDROOT_VERSION)/.config
 
 config:buildroot-$(BUILDROOT_VERSION)/.config
 	@make -C buildroot-$(BUILDROOT_VERSION) menuconfig
-
