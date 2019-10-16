@@ -38,6 +38,13 @@ case "$1" in
 		echo "Have external fstab mounting all filesystems"
 		mount -a -T /mnt/nand/fstab
 	fi
+	if [ ! -f /mnt/nand/shadow ];then
+		cp /etc/shadow /mnt/nand/shadow
+	fi
+	if [ -f /mnt/nand/shadow ];then
+		rm /etc/shadow
+		ln -sf /mnt/nand/shadow /etc/shadow
+	fi
 	;;
   stop)
 	sync

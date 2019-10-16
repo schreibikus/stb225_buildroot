@@ -47,3 +47,8 @@ or if you have ext4 USB-Flash:
 
 To configure WIFI, you must create the configuration file /mnt/nand/wpa_supplicant.conf.
 You can also copy the existing /etc/wpa_supplicant.conf file to the /mnt/nand directory and edit it.
+
+To configure login through ssh, you must set the root password and edit /etc/ssh/sshd_config by adding the following line:
+
+PermitRootLogin yes
+
