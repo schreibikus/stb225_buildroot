@@ -1,6 +1,6 @@
-# stb225 transmission
+# stb225 buildroot
 This is makefile for building the Linux image for a STB(Set Top Box) based on PNX8335(stb225).
-The main target of this image: to use STB only as a bittorrent client.
+The main target of this image: to use STB only as Linux server.
 
 ## Build Linux image
 To build the image run make in this directory.
@@ -51,4 +51,3 @@ You can also copy the existing /etc/wpa_supplicant.conf file to the /mnt/nand di
 To configure login through ssh, you must set the root password and edit /etc/ssh/sshd_config by adding the following line:
 
 PermitRootLogin yes
-
