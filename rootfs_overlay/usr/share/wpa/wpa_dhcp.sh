@@ -2,7 +2,7 @@
 
 case "$2" in
     CONNECTED)
-        udhcpc -R -n -p /var/run/udhcpc.$1.pid -i $1
+        udhcpc -R -n -p /var/run/udhcpc.$1.pid -i $1 -x hostname:${HOSTNAME}
         ;;
     DISCONNECTED)
         if [ -f /var/run/udhcpc.$1.pid ];then
