@@ -1,0 +1,11 @@
+diff -Naur buildroot-2019.08.1.orig/package/pkg-autotools.mk buildroot-2019.08.1/package/pkg-autotools.mk
+--- buildroot-2019.08.1.orig/package/pkg-autotools.mk	2019-10-03 10:12:47.000000000 +0300
++++ buildroot-2019.08.1/package/pkg-autotools.mk	2019-10-23 10:46:17.849151322 +0300
+@@ -200,7 +200,6 @@
+ 		--with-xmlto=no \
+ 		--with-fop=no \
+ 		$$(if $$($$(PKG)_OVERRIDE_SRCDIR),,--disable-dependency-tracking) \
+-		--enable-ipv6 \
+ 		$$(NLS_OPTS) \
+ 		$$(SHARED_STATIC_LIBS_OPTS) \
+ 		$$(QUIET) $$($$(PKG)_CONF_OPTS) \
