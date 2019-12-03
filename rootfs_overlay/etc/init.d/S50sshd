@@ -8,16 +8,32 @@
 
 umask 077
 
+NAND_SSH_DIR=/mnt/nand/ssh
+
+
+setTimeFromInet() {
+    while true ; do
+        ntpd -d -q -p europe.pool.ntp.org
+        if [ $? -eq 0 ]; then
+            break
+        else
+            #Failed! Timeout 5s
+            sleep 5
+        fi
+    done
+}
+
 start() {
 	# Start ntp date update
-	ntpd -d -q -p pool.ntp.org
+	setTimeFromInet &
 	# Create any missing keys
-	if [ ! -d /mnt/nand/ssh ];then
-		mkdir /mnt/nand/ssh
-		cp /etc/ssh/* /mnt/nand/ssh
+	if [ ! -d ${NAND_SSH_DIR} ]; then
+		mkdir ${NAND_SSH_DIR}
+		find /etc/ssh/ -mindepth 1 -maxdepth 1 -exec cp -a {} ${NAND_SSH_DIR} ';'
 	fi
-	if [ -d /mnt/nand/ssh ];then
-		mount /mnt/nand/ssh /etc/ssh -o bind
+	if [ -d ${NAND_SSH_DIR} ]; then
+		find /etc/ssh/ -mindepth 1 -maxdepth 1 -exec rm -rf {} ';'
+		mount ${NAND_SSH_DIR} /etc/ssh --bind
 	fi
 	/usr/bin/ssh-keygen -A
 

@@ -31,8 +31,6 @@ mountnand()
 case "$1" in
   start)
 	mountnand
-	mkdir -p /mnt/nand/transmission
-	chown -R transmission:transmission /mnt/nand/transmission
 	mkdir -p /mnt/downloads
 	if [ -f /mnt/nand/fstab ]; then
 		echo "Have external fstab mounting all filesystems"
@@ -45,6 +43,13 @@ case "$1" in
 		rm /etc/shadow
 		ln -sf /mnt/nand/shadow /etc/shadow
 	fi
+	if [ ! -d /mnt/nand/root ];then
+		cp -a /root /mnt/nand/
+	fi
+	if [ -d /mnt/nand/root ];then
+		find /root -mindepth 1 -maxdepth 1 -exec rm -rf {} ';'
+		mount /mnt/nand/root /root -o bind
+        fi
 	;;
   stop)
 	sync
