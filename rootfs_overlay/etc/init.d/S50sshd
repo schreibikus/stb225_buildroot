@@ -14,11 +14,11 @@ NAND_SSH_DIR=/mnt/nand/ssh
 setTimeFromInet() {
     while true ; do
         ntpd -d -q -p europe.pool.ntp.org
-        if [ $? -eq 0 ]; then
-            break
-        else
+        if date | grep 1970 ; then
             #Failed! Timeout 5s
             sleep 5
+        else
+            break
         fi
     done
 }
