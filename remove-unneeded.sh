@@ -10,3 +10,4 @@ rm -vf ${TARGET_DIR}/usr/bin/sftp
 rm -vf ${TARGET_DIR}/usr/bin/ssh{-add,-agent,-copy-id,-keyscan}
 rm -vrf ${TARGET_DIR}/etc/{rc0.d,rc2.d,rc3.d,rc5.d,xinetd.d}
 rm -vf ${TARGET_DIR}/etc/init.d/{cups,cups-browsed}
+rm -vf ${TARGET_DIR}/usr/lib/{os-release,libstdc++.so.*-gdb.py}
