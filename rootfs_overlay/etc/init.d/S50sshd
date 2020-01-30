@@ -25,7 +25,7 @@ setTimeFromInet() {
 
 start() {
 	# Start ntp date update
-	setTimeFromInet &
+	setTimeFromInet > /dev/null 2>&1 &
 	# Create any missing keys
 	if [ ! -d ${NAND_SSH_DIR} ]; then
 		mkdir ${NAND_SSH_DIR}
