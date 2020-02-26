@@ -2,6 +2,16 @@
 This is makefile for building the Linux image for a STB(Set Top Box) based on PNX8335(stb225).
 The main target of this image: to use STB only as Linux server.
 
+## How to choose needed the Linux kernel version
+
+Currently, the default Linux kernel is version 4.19.x
+
+### Using Linux 4.20.17 by default
+Make the following configuration changes:
+* Change "Toolchain" -> "Custom kernel headers series" to "4.20.x"
+* Change "Kernel" -> "Kernel version" to "4.20.17"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
+
 ## Build Linux image
 To build the image run make in this directory.
 Please find image at buildroot-*/output/images

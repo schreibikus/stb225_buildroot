@@ -1,0 +1,366 @@
+diff -Naur linux-4.20.17.orig/drivers/watchdog/Kconfig linux-4.20.17/drivers/watchdog/Kconfig
+--- linux-4.20.17.orig/drivers/watchdog/Kconfig	2019-03-19 15:11:56.000000000 +0300
++++ linux-4.20.17/drivers/watchdog/Kconfig	2020-02-24 17:41:24.348237112 +0300
+@@ -1511,7 +1511,7 @@
+ config PNX833X_WDT
+ 	tristate "PNX833x Hardware Watchdog"
+ 	depends on SOC_PNX8335
+-	depends on BROKEN
++	select WATCHDOG_CORE
+ 	help
+ 	  Hardware driver for the PNX833x's watchdog. This is a
+ 	  watchdog timer that will reboot the machine after a programmable
+diff -Naur linux-4.20.17.orig/drivers/watchdog/pnx833x_wdt.c linux-4.20.17/drivers/watchdog/pnx833x_wdt.c
+--- linux-4.20.17.orig/drivers/watchdog/pnx833x_wdt.c	2019-03-19 15:11:56.000000000 +0300
++++ linux-4.20.17/drivers/watchdog/pnx833x_wdt.c	2020-02-24 17:41:24.348237112 +0300
+@@ -21,66 +21,81 @@
+ 
+ #include <linux/module.h>
+ #include <linux/moduleparam.h>
+-#include <linux/types.h>
+-#include <linux/kernel.h>
+-#include <linux/fs.h>
+-#include <linux/mm.h>
+-#include <linux/miscdevice.h>
+ #include <linux/watchdog.h>
+-#include <linux/notifier.h>
+-#include <linux/reboot.h>
+-#include <linux/init.h>
+ #include <asm/mach-pnx833x/pnx833x.h>
+ 
+-#define WATCHDOG_TIMEOUT 30		/* 30 sec Maximum timeout */
+-#define WATCHDOG_COUNT_FREQUENCY 68000000U /* Watchdog counts at 68MHZ. */
+-#define	PNX_WATCHDOG_TIMEOUT	(WATCHDOG_TIMEOUT * WATCHDOG_COUNT_FREQUENCY)
+-#define PNX_TIMEOUT_VALUE	2040000000U
++#define WATCHDOG_DEFAULT_TIMEOUT		30
+ 
+ /** CONFIG block */
+-#define PNX833X_CONFIG                      (0x07000U)
+-#define PNX833X_CONFIG_CPU_WATCHDOG         (0x54)
+-#define PNX833X_CONFIG_CPU_WATCHDOG_COMPARE (0x58)
+-#define PNX833X_CONFIG_CPU_COUNTERS_CONTROL (0x1c)
++#define PNX833X_CONFIG				(0x07000U)
++#define PNX833X_CONFIG_CPU_WATCHDOG		(0x54)
++#define PNX833X_CONFIG_CPU_WATCHDOG_COMPARE	(0x58)
++#define PNX833X_CONFIG_CPU_COUNTERS_CONTROL	(0x1c)
+ 
+ /** RESET block */
+-#define PNX833X_RESET                       (0x08000U)
+-#define PNX833X_RESET_CONFIG                (0x08)
++#define PNX833X_RESET				(0x08000U)
++#define PNX833X_RESET_CONFIG			(0x08)
+ 
+-static int pnx833x_wdt_alive;
++/** CLOCK block */
++#define PNX833X_CLOCK				(0x09000U)
++#define PNX833X_CLOCK_PCP_CTL			(0x204)
++
++#define get_pnx833x_wdd(wdd_) container_of(wdd_, struct pnx833x_wdt, wdd)
++
++struct pnx833x_wdt {
++	struct watchdog_device wdd;
++	unsigned int clock_frequency;
++};
+ 
+-/* Set default timeout in MHZ.*/
+-static int pnx833x_wdt_timeout = PNX_WATCHDOG_TIMEOUT;
++/* Set default timeout */
++static int pnx833x_wdt_timeout = WATCHDOG_DEFAULT_TIMEOUT;
+ module_param(pnx833x_wdt_timeout, int, 0);
+-MODULE_PARM_DESC(timeout, "Watchdog timeout in Mhz. (68Mhz clock), default="
+-			__MODULE_STRING(PNX_TIMEOUT_VALUE) "(30 seconds).");
++MODULE_PARM_DESC(timeout, "Watchdog timeout in seconds. default="
++		__MODULE_STRING(WATCHDOG_DEFAULT_TIMEOUT) "(30 seconds).");
+ 
+ static bool nowayout = WATCHDOG_NOWAYOUT;
+ module_param(nowayout, bool, 0);
+ MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default="
+ 					__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+ 
+-#define START_DEFAULT	1
+-static int start_enabled = START_DEFAULT;
+-module_param(start_enabled, int, 0);
+-MODULE_PARM_DESC(start_enabled, "Watchdog is started on module insertion "
+-				"(default=" __MODULE_STRING(START_DEFAULT) ")");
++static unsigned int pnx833x_pibus_hz(void)
++{
++	unsigned int pibus_hz = 0;
++	unsigned int crystal_hz = 25 * 1000000;
++	unsigned int usb_pll_hz = 480 * 1000000;
++	unsigned int pcp_ctl = PNX833X_REG(PNX833X_CLOCK +
++		 PNX833X_CLOCK_PCP_CTL);
++
++	if (pcp_ctl & 0x1) { /* Clock is enabled */
++		if (pcp_ctl & 0x2) {
++			/* The divider range has valid values from 6 to 9 */
++			pibus_hz = usb_pll_hz / (6 + ((pcp_ctl >> 2) & 0x03));
++		} else {
++			pibus_hz = crystal_hz;
++		}
++	}
++
++	return pibus_hz;
++}
+ 
+-static void pnx833x_wdt_start(void)
++static int pnx833x_wdt_start(struct watchdog_device *wdd)
+ {
++	struct pnx833x_wdt *pnx833x_wdd = get_pnx833x_wdd(wdd);
++
+ 	/* Enable watchdog causing reset. */
+ 	PNX833X_REG(PNX833X_RESET + PNX833X_RESET_CONFIG) |= 0x1;
+ 	/* Set timeout.*/
+-	PNX833X_REG(PNX833X_CONFIG +
+-		PNX833X_CONFIG_CPU_WATCHDOG_COMPARE) = pnx833x_wdt_timeout;
++	PNX833X_REG(PNX833X_CONFIG + PNX833X_CONFIG_CPU_WATCHDOG_COMPARE) =
++		wdd->timeout * pnx833x_wdd->clock_frequency;
+ 	/* Enable watchdog. */
+ 	PNX833X_REG(PNX833X_CONFIG +
+ 				PNX833X_CONFIG_CPU_COUNTERS_CONTROL) |= 0x1;
+ 
+ 	pr_info("Started watchdog timer\n");
++	return 0;
+ }
+ 
+-static void pnx833x_wdt_stop(void)
++static int pnx833x_wdt_stop(struct watchdog_device *wdd)
+ {
+ 	/* Disable watchdog causing reset. */
+ 	PNX833X_REG(PNX833X_RESET + PNX833X_CONFIG) &= 0xFFFFFFFE;
+@@ -89,148 +104,59 @@
+ 			PNX833X_CONFIG_CPU_COUNTERS_CONTROL) &= 0xFFFFFFFE;
+ 
+ 	pr_info("Stopped watchdog timer\n");
++	return 0;
+ }
+ 
+-static void pnx833x_wdt_ping(void)
+-{
+-	PNX833X_REG(PNX833X_CONFIG +
+-		PNX833X_CONFIG_CPU_WATCHDOG_COMPARE) = pnx833x_wdt_timeout;
+-}
+-
+-/*
+- *	Allow only one person to hold it open
+- */
+-static int pnx833x_wdt_open(struct inode *inode, struct file *file)
++static int pnx833x_wdt_ping(struct watchdog_device *wdd)
+ {
+-	if (test_and_set_bit(0, &pnx833x_wdt_alive))
+-		return -EBUSY;
+-
+-	if (nowayout)
+-		__module_get(THIS_MODULE);
+-
+-	/* Activate timer */
+-	if (!start_enabled)
+-		pnx833x_wdt_start();
++	struct pnx833x_wdt *pnx833x_wdd = get_pnx833x_wdd(wdd);
+ 
+-	pnx833x_wdt_ping();
++	PNX833X_REG(PNX833X_CONFIG + PNX833X_CONFIG_CPU_WATCHDOG_COMPARE) =
++		wdd->timeout * pnx833x_wdd->clock_frequency;
+ 
+-	pr_info("Started watchdog timer\n");
+-
+-	return nonseekable_open(inode, file);
+-}
+-
+-static int pnx833x_wdt_release(struct inode *inode, struct file *file)
+-{
+-	/* Shut off the timer.
+-	 * Lock it in if it's a module and we defined ...NOWAYOUT */
+-	if (!nowayout)
+-		pnx833x_wdt_stop(); /* Turn the WDT off */
+-
+-	clear_bit(0, &pnx833x_wdt_alive);
+ 	return 0;
+ }
+ 
+-static ssize_t pnx833x_wdt_write(struct file *file, const char *data, size_t len, loff_t *ppos)
++static int pnx833x_wdt_set_timeout(struct watchdog_device *wdd, unsigned int t)
+ {
+-	/* Refresh the timer. */
+-	if (len)
+-		pnx833x_wdt_ping();
+-
+-	return len;
+-}
++	struct pnx833x_wdt *pnx833x_wdd = get_pnx833x_wdd(wdd);
+ 
+-static long pnx833x_wdt_ioctl(struct file *file, unsigned int cmd,
+-							unsigned long arg)
+-{
+-	int options, new_timeout = 0;
+-	uint32_t timeout, timeout_left = 0;
+-
+-	static const struct watchdog_info ident = {
+-		.options = WDIOF_KEEPALIVEPING | WDIOF_SETTIMEOUT,
+-		.firmware_version = 0,
+-		.identity = "Hardware Watchdog for PNX833x",
+-	};
+-
+-	switch (cmd) {
+-	default:
+-		return -ENOTTY;
+-
+-	case WDIOC_GETSUPPORT:
+-		if (copy_to_user((struct watchdog_info *)arg,
+-				 &ident, sizeof(ident)))
+-			return -EFAULT;
+-		return 0;
+-
+-	case WDIOC_GETSTATUS:
+-	case WDIOC_GETBOOTSTATUS:
+-		return put_user(0, (int *)arg);
+-
+-	case WDIOC_SETOPTIONS:
+-		if (get_user(options, (int *)arg))
+-			return -EFAULT;
+-
+-		if (options & WDIOS_DISABLECARD)
+-			pnx833x_wdt_stop();
+-
+-		if (options & WDIOS_ENABLECARD)
+-			pnx833x_wdt_start();
+-
+-		return 0;
+-
+-	case WDIOC_KEEPALIVE:
+-		pnx833x_wdt_ping();
+-		return 0;
+-
+-	case WDIOC_SETTIMEOUT:
+-	{
+-		if (get_user(new_timeout, (int *)arg))
+-			return -EFAULT;
+-
+-		pnx833x_wdt_timeout = new_timeout;
+-		PNX833X_REG(PNX833X_CONFIG +
+-			PNX833X_CONFIG_CPU_WATCHDOG_COMPARE) = new_timeout;
+-		return put_user(new_timeout, (int *)arg);
+-	}
+-
+-	case WDIOC_GETTIMEOUT:
+-		timeout = PNX833X_REG(PNX833X_CONFIG +
+-					PNX833X_CONFIG_CPU_WATCHDOG_COMPARE);
+-		return put_user(timeout, (int *)arg);
+-
+-	case WDIOC_GETTIMELEFT:
+-		timeout_left = PNX833X_REG(PNX833X_CONFIG +
+-						PNX833X_CONFIG_CPU_WATCHDOG);
+-		return put_user(timeout_left, (int *)arg);
+-
+-	}
++	PNX833X_REG(PNX833X_CONFIG + PNX833X_CONFIG_CPU_WATCHDOG_COMPARE) =
++		t * pnx833x_wdd->clock_frequency;
++	wdd->timeout = t;
++	return 0;
+ }
+ 
+-static int pnx833x_wdt_notify_sys(struct notifier_block *this,
+-					unsigned long code, void *unused)
++static unsigned int pnx833x_wdt_get_timeleft(struct watchdog_device *wdd)
+ {
+-	if (code == SYS_DOWN || code == SYS_HALT)
+-		pnx833x_wdt_stop(); /* Turn the WDT off */
++	struct pnx833x_wdt *pnx833x_wdd = get_pnx833x_wdd(wdd);
++	unsigned int timeout = PNX833X_REG(PNX833X_CONFIG +
++		 PNX833X_CONFIG_CPU_WATCHDOG_COMPARE);
++	unsigned int curval = PNX833X_REG(PNX833X_CONFIG +
++		PNX833X_CONFIG_CPU_WATCHDOG);
+ 
+-	return NOTIFY_DONE;
++	return (timeout - curval) / pnx833x_wdd->clock_frequency;
+ }
+ 
+-static const struct file_operations pnx833x_wdt_fops = {
+-	.owner		= THIS_MODULE,
+-	.llseek		= no_llseek,
+-	.write		= pnx833x_wdt_write,
+-	.unlocked_ioctl	= pnx833x_wdt_ioctl,
+-	.open		= pnx833x_wdt_open,
+-	.release	= pnx833x_wdt_release,
++static const struct watchdog_info pnx833x_wdt_ident = {
++	.identity = "PNX833x Watchdog Timer",
++	.options = WDIOF_SETTIMEOUT | WDIOF_KEEPALIVEPING | WDIOF_MAGICCLOSE
+ };
+ 
+-static struct miscdevice pnx833x_wdt_miscdev = {
+-	.minor		= WATCHDOG_MINOR,
+-	.name		= "watchdog",
+-	.fops		= &pnx833x_wdt_fops,
++static struct watchdog_ops pnx833x_wdt_ops = {
++	.owner = THIS_MODULE,
++	.start = pnx833x_wdt_start,
++	.stop = pnx833x_wdt_stop,
++	.ping = pnx833x_wdt_ping,
++	.set_timeout = pnx833x_wdt_set_timeout,
++	.get_timeleft = pnx833x_wdt_get_timeleft,
+ };
+ 
+-static struct notifier_block pnx833x_wdt_notifier = {
+-	.notifier_call = pnx833x_wdt_notify_sys,
++struct pnx833x_wdt pnx833x_wdd = {
++	.wdd = {
++		.info = &pnx833x_wdt_ident,
++		.ops = &pnx833x_wdt_ops,
++	},
+ };
+ 
+ static int __init watchdog_init(void)
+@@ -240,36 +166,38 @@
+ 	/* Lets check the reason for the reset.*/
+ 	cause = PNX833X_REG(PNX833X_RESET);
+ 	/*If bit 31 is set then watchdog was cause of reset.*/
+-	if (cause & 0x80000000) {
++	if (cause & 0x80000000)
+ 		pr_info("The system was previously reset due to the watchdog firing - please investigate...\n");
+-	}
+ 
+-	ret = register_reboot_notifier(&pnx833x_wdt_notifier);
+-	if (ret) {
+-		pr_err("cannot register reboot notifier (err=%d)\n", ret);
+-		return ret;
++	pnx833x_wdd.clock_frequency = pnx833x_pibus_hz();
++	if (pnx833x_wdd.clock_frequency == 0) {
++		pr_err("Invalid clock frequency");
++		return -EINVAL;
+ 	}
+ 
+-	ret = misc_register(&pnx833x_wdt_miscdev);
++	pnx833x_wdd.wdd.max_timeout = U32_MAX / pnx833x_wdd.clock_frequency;
++	pnx833x_wdd.wdd.timeout = pnx833x_wdt_timeout;
++	if (pnx833x_wdd.wdd.timeout > pnx833x_wdd.wdd.max_timeout)
++		pnx833x_wdd.wdd.timeout = pnx833x_wdd.wdd.max_timeout;
++
++	watchdog_set_nowayout(&pnx833x_wdd.wdd, nowayout);
++	ret = watchdog_register_device(&pnx833x_wdd.wdd);
+ 	if (ret) {
+-		pr_err("cannot register miscdev on minor=%d (err=%d)\n",
+-		       WATCHDOG_MINOR, ret);
+-		unregister_reboot_notifier(&pnx833x_wdt_notifier);
++		pr_err("Failed to register watchdog device");
+ 		return ret;
+ 	}
+ 
+-	pr_info("Hardware Watchdog Timer for PNX833x: Version 0.1\n");
+-
+-	if (start_enabled)
+-		pnx833x_wdt_start();
++	pr_info("Hardware Watchdog Timer for PNX833x: Version 0.1");
++	pr_info("timeout %d, max_timeout %d, nowayout %d, PI Bus clock %u Hz\n",
++		pnx833x_wdd.wdd.timeout, pnx833x_wdd.wdd.max_timeout,
++		nowayout, pnx833x_wdd.clock_frequency);
+ 
+ 	return 0;
+ }
+ 
+ static void __exit watchdog_exit(void)
+ {
+-	misc_deregister(&pnx833x_wdt_miscdev);
+-	unregister_reboot_notifier(&pnx833x_wdt_notifier);
++	watchdog_unregister_device(&pnx833x_wdd.wdd);
+ }
+ 
+ module_init(watchdog_init);
