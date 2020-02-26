@@ -4,13 +4,31 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-Currently, the default Linux kernel is version 4.19.x
+### Currently, the default Linux kernel is version 4.19.x
 
-### Using Linux 4.20.17 by default
+### For using Linux 4.20.17 by default(Notice: RTL WiFi does not work)
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.20.x"
 * Change "Kernel" -> "Kernel version" to "4.20.17"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
+
+### For using Linux 5.0.21 by default
+Make the following configuration changes:
+* Change "Toolchain" -> "Custom kernel headers series" to "5.0.x"
+* Change "Kernel" -> "Kernel version" to "5.0.21"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
+
+### For using Linux 5.1.21 by default(Notice: RTL WiFi does not work)
+Make the following configuration changes:
+* Change "Toolchain" -> "Custom kernel headers series" to "5.1.x"
+* Change "Kernel" -> "Kernel version" to "5.1.21"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
+
+### For using Linux 5.2.21 by default(Notice: RTL WiFi does not work)
+Make the following configuration changes:
+* Change "Toolchain" -> "Custom kernel headers series" to "5.2.x"
+* Change "Kernel" -> "Kernel version" to "5.2.21"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.2-*.patch"
 
 ## Build Linux image
 To build the image run make in this directory.
