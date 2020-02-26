@@ -1,0 +1,225 @@
+diff -Naur linux-4.9.214.orig/arch/mips/include/asm/mach-generic/kmalloc.h linux-4.9.214/arch/mips/include/asm/mach-generic/kmalloc.h
+--- linux-4.9.214.orig/arch/mips/include/asm/mach-generic/kmalloc.h	2020-02-14 23:31:10.000000000 +0200
++++ linux-4.9.214/arch/mips/include/asm/mach-generic/kmalloc.h	2020-02-26 12:40:50.956691190 +0200
+@@ -7,7 +7,7 @@
+  * Total overkill for most systems but need as a safe default.
+  * Set this one if any device in the system might do non-coherent DMA.
+  */
+-#define ARCH_DMA_MINALIGN	128
++#define ARCH_DMA_MINALIGN	16 /* 16 byte cache line on stb225 */
+ #endif
+ 
+ #endif /* __ASM_MACH_GENERIC_KMALLOC_H */
+diff -Naur linux-4.9.214.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h linux-4.9.214/arch/mips/include/asm/mach-pnx833x/pnx833x.h
+--- linux-4.9.214.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2020-02-14 23:31:10.000000000 +0200
++++ linux-4.9.214/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2020-02-26 12:40:51.004692461 +0200
+@@ -199,4 +199,8 @@
+ #define PNX8335_SATA_MODULE_ID_MODULE_ID_SHIFT	16
+ #define PNX8335_SATA_MODULE_ID_VALUE		0xA099
+ 
++#define PNX8335_SIF_CPU_OPTIMIZATION			PNX833X_REG(0x3038)
++#define PNX8335_SIF_CPU_OPTIMIZATION_CPU_FREE_MASK	0x1
++#define PNX8335_SIF_CPU_OPTIMIZATION_CPU_FREE_SHIFT	0
++
+ #endif
+diff -Naur linux-4.9.214.orig/arch/mips/Kconfig linux-4.9.214/arch/mips/Kconfig
+--- linux-4.9.214.orig/arch/mips/Kconfig	2020-02-14 23:31:10.000000000 +0200
++++ linux-4.9.214/arch/mips/Kconfig	2020-02-26 12:40:51.004692461 +0200
+@@ -574,6 +574,7 @@
+ 	bool "NXP 225 board"
+ 	select SOC_PNX833X
+ 	select SOC_PNX8335
++	select SYS_HAS_EARLY_PRINTK
+ 	help
+ 	 Support for NXP Semiconductors STB225 Development Board.
+ 
+@@ -1276,6 +1277,8 @@
+ config SOC_PNX8335
+ 	bool
+ 	select SOC_PNX833X
++	select MIPS_L1_CACHE_SHIFT_4
++	select USB_ARCH_HAS_HCD
+ 
+ config MIPS_SPRAM
+ 	bool
+diff -Naur linux-4.9.214.orig/arch/mips/pnx833x/common/gdb_hook.c linux-4.9.214/arch/mips/pnx833x/common/gdb_hook.c
+--- linux-4.9.214.orig/arch/mips/pnx833x/common/gdb_hook.c	1970-01-01 02:00:00.000000000 +0200
++++ linux-4.9.214/arch/mips/pnx833x/common/gdb_hook.c	2020-02-26 12:40:51.004692461 +0200
+@@ -0,0 +1,145 @@
++/*  Copyright (C) 2007 NXP B.V.
++    All Rights Reserved.
++    @file   gdb_hook.c
++    @brief  Uart connectivity
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++GNU General Public License for more details.
++
++You should have received a copy of the GNU General Public License
++along with this program; if not, write to the Free Software
++Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
++Or, point your browser to http://www.gnu.org/copyleft/gpl.html
++
++*/
++
++/***********************************************
++* INCLUDE FILES                                *
++************************************************/
++
++#include <asm/mach-pnx833x/pnx833x.h>
++#include <linux/serial_pnx8xxx.h>
++
++/***********************************************
++* LOCAL MACROS                                 *
++************************************************/
++
++#define UART0 (unsigned char *)PNX833X_UART0_PORTS_START
++#define UART1 (unsigned char *)PNX833X_UART1_PORTS_START
++
++/***********************************************
++* LOCAL TYPEDEFS                               *
++************************************************/
++
++/***********************************************
++* STATIC FUNCTION PROTOTYPES                   *
++************************************************/
++
++/***********************************************
++* STATIC DATA                                  *
++************************************************/
++/** Make sure that we setup console to correct uart 
++    as prom_puChar is used early on before proper kernel init.*/
++static unsigned char * consoleUart = UART0;
++static volatile int delay_count;
++
++/***********************************************
++* EXPORTED DATA                                *
++************************************************/
++
++/***********************************************
++* FUNCTION IMPLEMENTATION                      *
++************************************************/
++
++static unsigned int serial_in(unsigned char * baseAddress, int offset)
++{
++    return *((unsigned int volatile *)(baseAddress + offset));
++}
++
++static void serial_out(unsigned char * baseAddress, int offset,int value)
++{
++    *((unsigned int volatile *)(baseAddress + offset)) = value;
++}
++
++static void do_delay(void)
++{
++    int i;
++    for(i=0; i<10000; i++)
++    {
++        delay_count++;
++    }
++}
++
++static int putChar(unsigned char * baseAddress, char c)
++{
++    /* Wait for TX to be ready */
++    while(((serial_in(baseAddress, PNX8XXX_FIFO) & PNX8XXX_UART_FIFO_TXFIFO) >> 16) > 15)
++    {
++        do_delay();
++    }
++
++    /* Send the next character */
++    serial_out(baseAddress, PNX8XXX_FIFO, c);
++    serial_out(baseAddress, PNX8XXX_ICLR, PNX8XXX_UART_INT_TX);
++
++    return 1;
++}
++
++static char getChar(unsigned char * baseAddress)
++{
++    char output;
++
++    /* Wait for RX to be ready */
++    while ((serial_in(baseAddress, PNX8XXX_FIFO) & PNX8XXX_UART_FIFO_RXFIFO) == 0)
++    {
++        do_delay();
++    }
++
++    /* Get the character */
++    output = serial_in(baseAddress, PNX8XXX_FIFO) & 0xFF;
++
++    /* Move onto the next character in the buffer */
++    serial_out(baseAddress, PNX8XXX_LCR, serial_in(baseAddress, PNX8XXX_LCR) | PNX8XXX_UART_LCR_RX_NEXT);
++    serial_out(baseAddress, PNX8XXX_ICLR, PNX8XXX_UART_INT_RX);
++
++    return output;
++}
++
++static void serialInit(unsigned char * baseAddress)
++{
++    serial_out(baseAddress, PNX8XXX_LCR, PNX8XXX_UART_LCR_8BIT | PNX8XXX_UART_LCR_TX_RST | PNX8XXX_UART_LCR_RX_RST);
++    serial_out(baseAddress, PNX8XXX_MCR, PNX8XXX_UART_MCR_DTR | PNX8XXX_UART_MCR_RTS);
++    serial_out(baseAddress, PNX8XXX_BAUD, 1); // 115200 Baud
++    serial_out(baseAddress, PNX8XXX_CFG, 0x00060030);
++    serial_out(baseAddress, PNX8XXX_ICLR, -1);
++    serial_out(baseAddress, PNX8XXX_IEN, 0);
++}
++
++static void setupSerialOutput(void)
++{
++    static bool initialised = false;
++    if (!initialised) 
++    {
++        serialInit(consoleUart);
++        initialised = true;
++    }
++}
++
++int prom_putchar(char c)
++{
++    setupSerialOutput();
++    return putChar(consoleUart, c);
++}
++
++char prom_getchar(void)
++{
++    setupSerialOutput();
++    return getChar(consoleUart);
++}
+diff -Naur linux-4.9.214.orig/arch/mips/pnx833x/common/Makefile linux-4.9.214/arch/mips/pnx833x/common/Makefile
+--- linux-4.9.214.orig/arch/mips/pnx833x/common/Makefile	2020-02-14 23:31:10.000000000 +0200
++++ linux-4.9.214/arch/mips/pnx833x/common/Makefile	2020-02-26 12:40:51.004692461 +0200
+@@ -1 +1 @@
+-obj-y := interrupts.o platform.o prom.o setup.o reset.o
++obj-y := interrupts.o platform.o prom.o setup.o reset.o gdb_hook.o
+diff -Naur linux-4.9.214.orig/arch/mips/pnx833x/common/setup.c linux-4.9.214/arch/mips/pnx833x/common/setup.c
+--- linux-4.9.214.orig/arch/mips/pnx833x/common/setup.c	2020-02-14 23:31:10.000000000 +0200
++++ linux-4.9.214/arch/mips/pnx833x/common/setup.c	2020-02-26 12:40:51.004692461 +0200
+@@ -38,9 +38,9 @@
+ 
+ int __init plat_mem_setup(void)
+ {
+-	/* set mips clock to 320MHz */
++	/* set mips clock to 400MHz */
+ #if defined(CONFIG_SOC_PNX8335)
+-	PNX8335_WRITEFIELD(0x17, CLOCK_PLL_CPU_CTL, FREQ);
++	PNX8335_WRITEFIELD(0x1F, CLOCK_PLL_CPU_CTL, FREQ);
+ #endif
+ 	pnx833x_gpio_init();	/* so it will be ready in board_setup() */
+ 
+@@ -57,5 +57,10 @@
+ 	iomem_resource.start = 0;
+ 	iomem_resource.end = ~0;
+ 
++#if defined(CONFIG_SOC_PNX8335)
++	/* Allows full bandwidth for CPU when no AGU request is pending */
++	PNX8335_WRITEFIELD(0x1, SIF_CPU_OPTIMIZATION, CPU_FREE);
++#endif
++
+ 	return 0;
+ }
