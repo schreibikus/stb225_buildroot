@@ -6,6 +6,12 @@ The main target of this image: to use STB only as Linux server.
 
 ### Currently, the default Linux kernel is version 4.19.x
 
+### For using Linux 4.4.214 by default(Notice: RTL WiFi does not work)
+Make the following configuration changes:
+* Change "Toolchain" -> "Custom kernel headers series" to "4.4.x"
+* Change "Kernel" -> "Kernel version" to "4.4.214"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.4-*.patch"
+
 ### For using Linux 4.9.214 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.9.x"
