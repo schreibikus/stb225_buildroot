@@ -4,7 +4,7 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-### Currently, the default Linux kernel is version 5.4.23
+### Currently, the default Linux kernel is version 5.4.24
 
 ### For using Linux 4.4.215 by default
 Make the following configuration changes:
@@ -24,10 +24,10 @@ Make the following configuration changes:
 * Change "Kernel" -> "Kernel version" to "4.14.172"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 4.19.107 by default
+### For using Linux 4.19.108 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.19.x"
-* Change "Kernel" -> "Kernel version" to "4.19.107"
+* Change "Kernel" -> "Kernel version" to "4.19.108"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
 ### For using Linux 4.20.17 by default
@@ -60,10 +60,10 @@ Make the following configuration changes:
 * Change "Kernel" -> "Kernel version" to "5.3.18"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.2-*.patch"
 
-### For using Linux 5.5.7 by default
+### For using Linux 5.5.8 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "5.4.x or later"
-* Change "Kernel" -> "Kernel version" to "5.5.7"
+* Change "Kernel" -> "Kernel version" to "5.5.8"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.5-*.patch"
 
 ## Build Linux image
