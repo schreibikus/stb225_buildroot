@@ -24,7 +24,7 @@ mountnand()
 		echo "Can't find NAND Filesystem :("
 	else
 		echo Mount Filesystem $device
-		mount -t jffs2 $device /mnt/nand
+		mount -t jffs2 $device /mnt/nand -o noatime
 	fi
 }
 
