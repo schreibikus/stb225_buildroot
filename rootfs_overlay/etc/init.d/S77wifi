@@ -3,15 +3,17 @@
 # Start the wireless network....
 #
 
+source /etc/default/storage
+
 case "$1" in
   start)
 	if [ "`cat /proc/net/dev | grep wlan0`" != "" ];then
-		if [ -f /mnt/nand/wpa_supplicant.conf ];then
+		if [ -f ${STORAGE}/wpa_supplicant.conf ];then
 			printf "Starting network: "
-			wpa_supplicant -i wlan0 -c /mnt/nand/wpa_supplicant.conf -B && wpa_cli -a /usr/share/wpa/wpa_dhcp.sh -B
+			wpa_supplicant -i wlan0 -c ${STORAGE}/wpa_supplicant.conf -B && wpa_cli -a /usr/share/wpa/wpa_dhcp.sh -B
 			[ $? = 0 ] && echo "OK" || echo "FAIL"
 		else
-			printf "No /mnt/nand/wpa_supplicant.conf config found"
+			printf "No ${STORAGE}/wpa_supplicant.conf config found"
 		fi
 	 fi
 	;;

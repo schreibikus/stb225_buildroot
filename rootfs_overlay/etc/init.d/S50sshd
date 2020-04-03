@@ -8,8 +8,8 @@
 
 umask 077
 
-NAND_SSH_DIR=/mnt/nand/ssh
-
+source /etc/default/storage
+SSH_STORAGE_DIR=${STORAGE}/ssh
 
 setTimeFromInet() {
     while true ; do
@@ -27,13 +27,13 @@ start() {
 	# Start ntp date update
 	setTimeFromInet > /dev/null 2>&1 &
 	# Create any missing keys
-	if [ ! -d ${NAND_SSH_DIR} ]; then
-		mkdir ${NAND_SSH_DIR}
-		find /etc/ssh/ -mindepth 1 -maxdepth 1 -exec cp -a {} ${NAND_SSH_DIR} ';'
+	if [ ! -d ${SSH_STORAGE_DIR} ]; then
+		mkdir ${SSH_STORAGE_DIR}
+		find /etc/ssh/ -mindepth 1 -maxdepth 1 -exec cp -a {} ${SSH_STORAGE_DIR} ';'
 	fi
-	if [ -d ${NAND_SSH_DIR} ]; then
+	if [ -d ${SSH_STORAGE_DIR} ]; then
 		find /etc/ssh/ -mindepth 1 -maxdepth 1 -exec rm -rf {} ';'
-		mount ${NAND_SSH_DIR} /etc/ssh --bind
+		mount ${SSH_STORAGE_DIR} /etc/ssh --bind
 	fi
 	/usr/bin/ssh-keygen -A
 

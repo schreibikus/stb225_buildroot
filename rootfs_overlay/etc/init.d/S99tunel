@@ -1,0 +1,32 @@
+#!/bin/sh
+
+source /etc/default/storage
+CONFIG_FILE=${STORAGE}/tunelOpts
+
+createTunel() {
+    echo Start tunel with $@
+    while true; do
+        ssh $@ > /dev/null 2>&1
+        sleep 3
+    done
+}
+
+
+case "$1" in
+    start)
+        if [ -f ${CONFIG_FILE} ]; then
+            createTunel `cat ${CONFIG_FILE}` &
+        else
+            echo Skip tunnel
+        fi
+        ;;
+    stop)
+        ;;
+    restart|reload)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+esac
+
+exit $?
