@@ -1,0 +1,908 @@
+diff -Naur linux-4.19.114.orig/arch/mips/kernel/cevt-r4k.c linux-4.19.114/arch/mips/kernel/cevt-r4k.c
+--- linux-4.19.114.orig/arch/mips/kernel/cevt-r4k.c	2020-04-02 16:28:25.000000000 +0300
++++ linux-4.19.114/arch/mips/kernel/cevt-r4k.c	2020-04-07 12:36:19.251420594 +0300
+@@ -15,6 +15,11 @@
+ #include <asm/time.h>
+ #include <asm/cevt-r4k.h>
+ 
++#if defined (CONFIG_TIME_DOCTOR)
++#include <linux/timedoctor.h>
++#define TIMEDOCTOR_TIMER_IRQ  (7)
++#endif
++
+ static int mips_next_event(unsigned long delta,
+ 			   struct clock_event_device *evt)
+ {
+@@ -132,14 +137,22 @@
+ 	struct clock_event_device *cd;
+ 	int cpu = smp_processor_id();
+ 
++#if defined (CONFIG_TIME_DOCTOR)
++	timeDoctor_interrupt_enter(TIMEDOCTOR_TIMER_IRQ);
++#endif
++
+ 	/*
+ 	 * Suckage alert:
+ 	 * Before R2 of the architecture there was no way to see if a
+ 	 * performance counter interrupt was pending, so we have to run
+ 	 * the performance counter interrupt handler anyway.
+ 	 */
+-	if (handle_perf_irq(r2))
++	if (handle_perf_irq(r2)) {
++#if defined (CONFIG_TIME_DOCTOR)
++		timeDoctor_interrupt_exit(TIMEDOCTOR_TIMER_IRQ);
++#endif
+ 		return IRQ_HANDLED;
++	}
+ 
+ 	/*
+ 	 * The same applies to performance counter interrupts.	But with the
+@@ -151,10 +164,15 @@
+ 		write_c0_compare(read_c0_compare());
+ 		cd = &per_cpu(mips_clockevent_device, cpu);
+ 		cd->event_handler(cd);
+-
++#if defined (CONFIG_TIME_DOCTOR)
++		timeDoctor_interrupt_exit(TIMEDOCTOR_TIMER_IRQ);
++#endif
+ 		return IRQ_HANDLED;
+ 	}
+ 
++#if defined (CONFIG_TIME_DOCTOR)
++	timeDoctor_interrupt_exit(TIMEDOCTOR_TIMER_IRQ);
++#endif
+ 	return IRQ_NONE;
+ }
+ 
+diff -Naur linux-4.19.114.orig/arch/mips/pnx833x/common/interrupts.c linux-4.19.114/arch/mips/pnx833x/common/interrupts.c
+--- linux-4.19.114.orig/arch/mips/pnx833x/common/interrupts.c	2020-04-02 16:28:25.000000000 +0300
++++ linux-4.19.114/arch/mips/pnx833x/common/interrupts.c	2020-04-07 12:37:51.465891176 +0300
+@@ -29,6 +29,10 @@
+ #include <irq.h>
+ #include <irq-mapping.h>
+ #include <gpio.h>
++#if defined (CONFIG_TIME_DOCTOR)
++#include <linux/timedoctor.h>
++#endif
++
+ 
+ static int mips_cpu_timer_irq;
+ 
+@@ -114,11 +118,23 @@
+ 			int pin;
+ 			while ((pin = ffs(mask & 0xffff))) {
+ 				pin -= 1;
++#if defined (CONFIG_TIME_DOCTOR)
++				timeDoctor_interrupt_enter((PNX833X_GPIO_IRQ_BASE + pin));
++#endif
+ 				do_IRQ(PNX833X_GPIO_IRQ_BASE + pin);
++#if defined (CONFIG_TIME_DOCTOR)
++				timeDoctor_interrupt_exit((PNX833X_GPIO_IRQ_BASE + pin));
++#endif
+ 				mask &= ~(1 << pin);
+ 			}
+ 		} else {
++#if defined (CONFIG_TIME_DOCTOR)
++			timeDoctor_interrupt_enter((irq + PNX833X_PIC_IRQ_BASE));
++#endif
+ 			do_IRQ(irq + PNX833X_PIC_IRQ_BASE);
++#if defined (CONFIG_TIME_DOCTOR)
++			timeDoctor_interrupt_exit((irq + PNX833X_PIC_IRQ_BASE));
++#endif
+ 		}
+ 
+ 		PNX833X_PIC_INT_PRIORITY = priority;
+diff -Naur linux-4.19.114.orig/include/linux/timedoctor.h linux-4.19.114/include/linux/timedoctor.h
+--- linux-4.19.114.orig/include/linux/timedoctor.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-4.19.114/include/linux/timedoctor.h	2020-04-07 11:18:50.232038246 +0300
+@@ -0,0 +1,166 @@
++#ifndef _TIMEDOCTOR_H
++#define _TIMEDOCTOR_H
++
++/******************************************************************************/
++/**
++ * \brief These types describe the command to log
++ *
++ * \sa    TDI_COMMAND
++ */
++/******************************************************************************/
++#define TDI_DELETE  4
++#define TDI_CREATE  3
++#define TDI_GENERIC 2
++#define TDI_START   1
++#define TDI_STOP    0
++
++/******************************************************************************/
++/**
++ * \brief  These types describe the kind of object to log
++ *
++ * \sa     TDI_COMMAND
++ */
++/******************************************************************************/
++#define TDI_TASK   0
++#define TDI_ISR    1
++#define TDI_SEM    2
++#define TDI_QUEUE  3
++#define TDI_EVENT  4
++#define TDI_AGENT  8
++
++#define TDI_CR     2
++#define TDI_TRACE  3
++
++#define TIMEDOCTOR_INFO_DATASIZE (3)
++
++#define TIMEDOCTOR_IOCTL_RESET           _IO( 'T', 0)
++#define TIMEDOCTOR_IOCTL_START           _IO( 'T', 1)
++#define TIMEDOCTOR_IOCTL_STOP            _IO( 'T', 2)
++#define TIMEDOCTOR_IOCTL_GET_ENTRIES     _IO( 'T', 3)
++#define TIMEDOCTOR_IOCTL_GET_MAX_ENTRIES _IO( 'T', 4)
++#define TIMEDOCTOR_IOCTL_INFO            _IO( 'T', 5)
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to build the first argument of the main log
++ *         API in a way that is compliant with time doctor
++ *
++ * \sa     TDI_COMMAND
++ */
++/******************************************************************************/
++#define TDI_COMMAND(cmd, type) \
++    (cmd << 24 | type << 16)
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to convert a 4 char array into a 32 bits word.
++ *         It is typically used to convert task names into a 32 bit word.
++ *
++ * \sa     TDI_COMMAND
++ */
++/******************************************************************************/
++#define CHAR_ARRAY_TO_U32(array) \
++    ((unsigned int)((array[0]<<24)|(array[1]<<16)|(array[2]<<8)|array[3]))
++
++#define CHAR2_ARRAY_TO_U32(array) \
++    ((unsigned int)((array[4]<<24)|(array[5]<<16)|(array[6]<<8)|array[7]))
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to log the creation of a task.
++ *
++ * \sa     
++ */
++/******************************************************************************/
++#define timeDoctor_task_create(Tid, Name) \
++    timeDoctor_Info(TDI_COMMAND(TDI_CREATE, TDI_TASK) | Tid, CHAR_ARRAY_TO_U32(Name), CHAR2_ARRAY_TO_U32(Name))
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to log the deletion of a task.
++ *
++ * \sa     
++ */
++/******************************************************************************/
++#define timeDoctor_task_delete(Tid, Name) \
++    timeDoctor_Info(TDI_COMMAND(TDI_DELETE, TDI_TASK) | Tid, Name, 0)
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to log the switch of tasks
++ *
++ * \sa     
++ */
++/******************************************************************************/
++#define timeDoctor_task_switch( NewTid, NewName, \
++                            OldTid, OldName) \
++    timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_TASK) | OldTid, CHAR_ARRAY_TO_U32(OldName), CHAR2_ARRAY_TO_U32(OldName)); \
++    timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_TASK) | NewTid, CHAR_ARRAY_TO_U32(NewName), CHAR2_ARRAY_TO_U32(NewName))
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to log the start of an ISR
++ *
++ * \sa     
++ */
++/******************************************************************************/
++#define timeDoctor_interrupt_enter(isr_id) \
++    timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_ISR) | isr_id, 0, 0)
++
++/******************************************************************************/
++/**
++ * \brief  This macro is used to log the exit of an ISR
++ *
++ * \sa     
++ */
++/******************************************************************************/
++#define timeDoctor_interrupt_exit(isr_id) \
++    timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_ISR) | isr_id, 0, 0)
++
++/******************************************************************************/
++/** \brief  This function records an event in the event buffer. An event is 
++ *          composed of a 32 bit time stamp and 3 data of 32 bits length.
++ *
++ *  \param  data1 : data to log
++ *  \param  data2 : data to log
++ *  \param  data3 : data to log
++ *
++ *  \return None
++ *
++ *  \sa     
++ */
++/******************************************************************************/
++void
++timeDoctor_Info(
++        unsigned int data1,
++        unsigned int data2,
++        unsigned int data3);
++
++/******************************************************************************/
++/** \brief  This function changes the level of trace.
++ *
++ *  \param  level : 0 -> trace off
++ *                  1 -> trace on
++ *
++ *  \return None
++ *
++ *  \sa     
++ */
++/******************************************************************************/
++void
++timeDoctor_SetLevel(
++        int level);
++
++/******************************************************************************/
++/** \brief  This function reset the event buffer.
++ *
++ *  \return None
++ *
++ *  \sa     
++ */
++/******************************************************************************/
++void
++timeDoctor_Reset(
++        void);
++
++#endif /* _TIMEDOCTOR_H */
+diff -Naur linux-4.19.114.orig/init/Kconfig linux-4.19.114/init/Kconfig
+--- linux-4.19.114.orig/init/Kconfig	2020-04-07 12:43:50.919821672 +0300
++++ linux-4.19.114/init/Kconfig	2020-04-07 11:18:50.232038246 +0300
+@@ -323,6 +323,19 @@
+ 	  earlier, you may need to enable this syscall.  Current systems
+ 	  running glibc can safely disable this.
+ 
++config TIME_DOCTOR
++        tristate "Enable Time Doctor output"
++	default n
++	help
++	  Collect information on tasks and interrupts
++
++config TIME_DOCTOR_SAMPLES
++	int "Number of Time Doctor samples to be stored"
++	depends on TIME_DOCTOR
++	default 131072
++	help
++	  Maximum number of time doctor samples to be stored
++
+ config AUDIT
+ 	bool "Auditing support"
+ 	depends on NET
+diff -Naur linux-4.19.114.orig/kernel/fork.c linux-4.19.114/kernel/fork.c
+--- linux-4.19.114.orig/kernel/fork.c	2020-04-07 12:43:50.919821672 +0300
++++ linux-4.19.114/kernel/fork.c	2020-04-07 11:18:50.232038246 +0300
+@@ -104,6 +104,10 @@
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/task.h>
+ 
++#ifdef CONFIG_TIME_DOCTOR
++#include <linux/timedoctor.h>
++#endif
++
+ /*
+  * Minimum number of threads to boot the kernel
+  */
+@@ -2211,6 +2215,10 @@
+ 	if (IS_ERR(p))
+ 		return PTR_ERR(p);
+ 
++#ifdef CONFIG_TIME_DOCTOR
++	if(p->mm)
++		timeDoctor_task_create(p->pid, p->comm);
++#endif
+ 	/*
+ 	 * Do this prior waking up the new thread - the thread pointer
+ 	 * might get invalid after that point, if the thread exits quickly.
+diff -Naur linux-4.19.114.orig/kernel/kthread.c linux-4.19.114/kernel/kthread.c
+--- linux-4.19.114.orig/kernel/kthread.c	2020-04-07 12:43:50.919821672 +0300
++++ linux-4.19.114/kernel/kthread.c	2020-04-07 11:18:50.232038246 +0300
+@@ -22,6 +22,10 @@
+ #include <linux/uaccess.h>
+ #include <trace/events/sched.h>
+ 
++#ifdef CONFIG_TIME_DOCTOR
++#include <linux/timedoctor.h>
++#endif
++
+ static DEFINE_SPINLOCK(kthread_create_lock);
+ static LIST_HEAD(kthread_create_list);
+ struct task_struct *kthreadd_task;
+@@ -333,6 +337,9 @@
+ 		 */
+ 		vsnprintf(name, sizeof(name), namefmt, args);
+ 		set_task_comm(task, name);
++#ifdef CONFIG_TIME_DOCTOR
++		timeDoctor_task_create(task->pid, task->comm);
++#endif
+ 		/*
+ 		 * root may have changed our (kthreadd's) priority or CPU mask.
+ 		 * The kernel thread should not inherit these properties.
+diff -Naur linux-4.19.114.orig/kernel/Makefile linux-4.19.114/kernel/Makefile
+--- linux-4.19.114.orig/kernel/Makefile	2020-04-07 12:43:50.919821672 +0300
++++ linux-4.19.114/kernel/Makefile	2020-04-07 11:18:50.232038246 +0300
+@@ -114,6 +114,7 @@
+ obj-$(CONFIG_HAS_IOMEM) += iomem.o
+ obj-$(CONFIG_ZONE_DEVICE) += memremap.o
+ obj-$(CONFIG_RSEQ) += rseq.o
++obj-$(CONFIG_TIME_DOCTOR) += timedoctor.o
+ 
+ $(obj)/configs.o: $(obj)/config_data.h
+ 
+diff -Naur linux-4.19.114.orig/kernel/sched/core.c linux-4.19.114/kernel/sched/core.c
+--- linux-4.19.114.orig/kernel/sched/core.c	2020-04-07 12:43:50.919821672 +0300
++++ linux-4.19.114/kernel/sched/core.c	2020-04-07 11:18:50.232038246 +0300
+@@ -17,6 +17,10 @@
+ #include "../workqueue_internal.h"
+ #include "../smpboot.h"
+ 
++#ifdef CONFIG_TIME_DOCTOR
++#include <linux/timedoctor.h>
++#endif
++
+ #include "pelt.h"
+ 
+ #define CREATE_TRACE_POINTS
+@@ -2792,6 +2796,9 @@
+ 
+ 	mm = next->mm;
+ 	oldmm = prev->active_mm;
++#ifdef CONFIG_TIME_DOCTOR
++	timeDoctor_task_switch(next->pid, next->comm, prev->pid, prev->comm);
++#endif
+ 	/*
+ 	 * For paravirt, this is coupled with an exit in switch_to to
+ 	 * combine the page table reload and the switch backend into
+diff -Naur linux-4.19.114.orig/kernel/softirq.c linux-4.19.114/kernel/softirq.c
+--- linux-4.19.114.orig/kernel/softirq.c	2020-04-02 16:28:25.000000000 +0300
++++ linux-4.19.114/kernel/softirq.c	2020-04-07 12:02:51.623009854 +0300
+@@ -27,6 +27,10 @@
+ #include <linux/tick.h>
+ #include <linux/irq.h>
+ 
++#ifdef CONFIG_TIME_DOCTOR
++#include <linux/timedoctor.h>
++#endif
++
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/irq.h>
+ 
+@@ -62,6 +66,13 @@
+ 	"TASKLET", "SCHED", "HRTIMER", "RCU"
+ };
+ 
++#ifdef CONFIG_TIME_DOCTOR
++const char * const softirq_timedoctor[NR_SOFTIRQS] = {
++	"SIRQHI  ", "SIRQTIME", "SIRQNETT", "SIRQNETR", "SIRQBLCK", "SIRQPOLL",
++	"SIRQTASK", "SIRQSCHD", "SIRQHRTM", "SIRQRCU "
++};
++#endif
++
+ /*
+  * we cannot loop indefinitely here to avoid userspace starvation,
+  * but we also don't want to introduce a worst case 1/HZ latency
+@@ -289,7 +300,13 @@
+ 		kstat_incr_softirqs_this_cpu(vec_nr);
+ 
+ 		trace_softirq_entry(vec_nr);
++#ifdef CONFIG_TIME_DOCTOR
++		timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32((softirq_timedoctor[vec_nr] + 4)), CHAR_ARRAY_TO_U32(softirq_timedoctor[vec_nr]));
++#endif
+ 		h->action(h);
++#ifdef CONFIG_TIME_DOCTOR
++		timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32((softirq_timedoctor[vec_nr] + 4)), CHAR_ARRAY_TO_U32(softirq_timedoctor[vec_nr]));
++#endif
+ 		trace_softirq_exit(vec_nr);
+ 		if (unlikely(prev_count != preempt_count())) {
+ 			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",
+diff -Naur linux-4.19.114.orig/kernel/timedoctor.c linux-4.19.114/kernel/timedoctor.c
+--- linux-4.19.114.orig/kernel/timedoctor.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-4.19.114/kernel/timedoctor.c	2020-04-07 11:18:50.232038246 +0300
+@@ -0,0 +1,491 @@
++/*****************************************************************************/
++/* Copyright (c) 2009 NXP B.V.                                               */
++/*                                                                           */
++/* This program is free software; you can redistribute it and/or modify      */
++/* it under the terms of the GNU General Public License as published by      */
++/* the Free Software Foundation, using version 2 of the License.             */
++/*                                                                           */
++/* This program is distributed in the hope that it will be useful,           */
++/* but WITHOUT ANY WARRANTY; without even the implied warranty of            */
++/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the              */
++/* GNU General Public License for more details.                              */
++/*                                                                           */
++/* You should have received a copy of the GNU General Public License         */
++/* along with this program; if not, write to the Free Software               */
++/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307       */
++/* USA.                                                                      */
++/*                                                                           */
++/*****************************************************************************/
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/proc_fs.h>
++#include <linux/device.h>
++#include <linux/seq_file.h>
++#include <linux/miscdevice.h>
++#include <linux/mm.h>
++#include <linux/ioport.h>
++#include <linux/timedoctor.h>
++#include <linux/uaccess.h>
++#include <asm/io.h>
++
++/******************************************************************************
++* LOCAL MACROS                                                                *
++*******************************************************************************/
++
++#define TIME_DOCTOR_DESCRIPTION "Time doctor event logger"
++#define TIME_DOCTOR_DEVNAME "timedoctor"
++
++//  ----------------------- Log MODULE Debug Level  ------------------------
++static int debug_level = 0;
++module_param(debug_level, int, 0);
++MODULE_PARM_DESC(debug_level, "Debug level (0-1)");
++
++/**** Module Setup ****/
++MODULE_LICENSE("GPL v2");
++MODULE_DESCRIPTION(TIME_DOCTOR_DESCRIPTION);
++MODULE_AUTHOR("NXP B.V.");
++
++#define NB_DATA              (CONFIG_TIME_DOCTOR_SAMPLES)
++#define NB_FIELDS_PER_RECORD (4)
++#define DATA_SIZE            (NB_DATA*sizeof(timeDoctorRecord_t))
++
++/******************************************************************************
++* LOCAL TYPEDEFS                                                              *
++*******************************************************************************/
++typedef unsigned int timeDoctorRecord_t[NB_FIELDS_PER_RECORD];
++
++/******************************************************************************
++* STATIC FUNCTION PROTOTYPES                                                  *
++*******************************************************************************/
++
++/* Declare funcions needed by the structures below */
++static void   *timeDoctor_SeqStart(struct seq_file *, loff_t *);
++static void   *timeDoctor_SeqNext(struct seq_file *, void *, loff_t *);
++static void    timedoctor_SeqStop(struct seq_file *, void *);
++static int     timedoctor_SeqShow(struct seq_file *, void *);
++
++static int     timeDoctor_OpenProc(struct inode*, struct file *);
++static ssize_t timeDoctor_WriteProc(struct file*, const char __user *, size_t, loff_t *);
++
++
++/******************************************************************************
++* EXPORTED DATA                                                               *
++*******************************************************************************/
++
++/******************************************************************************
++* LOCAL DATA                                                                  *
++*******************************************************************************/
++
++/* This array stores NB_DATA records, each of which is 4 words */
++static timeDoctorRecord_t *gtimeDoctorData;
++static struct page  *gtimeDoctorSharedPage;
++
++/* Index pointing to the next available word in the array */
++static unsigned int gtimeDoctorIndex;
++
++/* Indicates whether we're allowed to wrap around our buffer.
++   Default value is on. */
++static unsigned int gtimeDoctorDataWrapAllowed = 1;
++
++/* Indicates whether we've wrapped around our buffer. */
++static unsigned int gtimeDoctorDataWrapped;
++
++/* Operations for reading /proc/timedoctor one record at a time */
++static struct seq_operations timedoctor_seq_ops = {
++    .start = timeDoctor_SeqStart,
++    .next  = timeDoctor_SeqNext,
++    .stop  = timedoctor_SeqStop,
++    .show  = timedoctor_SeqShow
++};
++
++/* Operations for reading/writing /proc/timedoctor */
++static struct file_operations timedoctor_proc_fops = {
++    .owner   = THIS_MODULE,
++    .open    = timeDoctor_OpenProc,
++    .read    = seq_read,
++    .write   = timeDoctor_WriteProc,
++    .llseek  = seq_lseek,
++    .release = seq_release
++};
++
++
++/******************************************************************************
++* FUNCTION IMPLEMENTATION                                                     *
++*******************************************************************************/
++
++static int
++timeDoctor_BufferInit(
++        void)
++{
++    gtimeDoctorData = (timeDoctorRecord_t*)__get_free_pages(GFP_KERNEL, get_order(DATA_SIZE));
++    if (gtimeDoctorData == 0)
++    {
++        printk(KERN_ERR "Unable to allocate timedoctor memory\n");
++        return -ENOMEM;
++    }
++    gtimeDoctorSharedPage = virt_to_page(gtimeDoctorData);
++
++    return 0;
++}    /* Log init */
++
++/* seq_read takes care of all reading for us */
++static int timeDoctor_OpenProc(struct inode* inode, struct file *file)
++{
++    return seq_open(file, &timedoctor_seq_ops);
++}
++
++/* Start a seq read, convert initial record# to pointer */
++static void *timeDoctor_SeqStart(struct seq_file *s, loff_t *pos)
++{
++    loff_t localPos = *pos;
++    unsigned int dataLimit = gtimeDoctorIndex;
++
++    if (gtimeDoctorDataWrapped)
++    {
++        localPos = (gtimeDoctorIndex + (*pos)) % NB_DATA;
++        dataLimit = NB_DATA;
++    }
++
++    if ((*pos) >= dataLimit)
++        return NULL; /* No more to read */
++    return gtimeDoctorData + localPos;
++}
++
++/* Increment to next record# & convert to pointer */
++static void *timeDoctor_SeqNext(struct seq_file *s, void *v, loff_t *pos)
++{
++    loff_t localPos;
++    unsigned int dataLimit = gtimeDoctorIndex;
++
++    (*pos)++;
++    localPos = *pos;
++    if (gtimeDoctorDataWrapped)
++    {
++        localPos = (gtimeDoctorIndex + (*pos)) % NB_DATA;
++        dataLimit = NB_DATA;
++    }
++    if ((*pos) >= dataLimit)
++        return NULL;
++    return gtimeDoctorData + localPos;
++}
++
++static void timedoctor_SeqStop(struct seq_file *f, void *v)
++{
++    /* Nothing to do */
++}
++
++/* Display a single record, from pointer prepared by start/next */
++static int timedoctor_SeqShow(struct seq_file *s, void *v)
++{
++    unsigned int* rec = (unsigned int*)v;
++    seq_printf(s, "%08x %08x %08x %08x\n", rec[0], rec[1], rec[2], rec[3] );
++    return 0;
++}
++
++static ssize_t
++timeDoctor_WriteProc(
++        struct file          * file,
++        const char __user    * buffer,
++        size_t                 count,
++        loff_t               * data)
++{
++    char command[10];
++
++    if (!count)
++    {
++        return 0;
++    }
++    else if(count > 10)
++    {
++        printk("timeDoctor_WriteProc: Problem ! count = %u\n", count);
++        return -EFAULT;
++    }
++
++    if (copy_from_user(&command, buffer, count))
++    {
++        return -EFAULT;
++    }
++
++    if (!strncmp(command, "off", 3))
++    {
++        timeDoctor_SetLevel(0);
++        printk("debug_level:off\n");
++    }
++    else if (!strncmp(command, "on", 2))
++    {
++        timeDoctor_SetLevel(1);
++        printk("debug_level:on\n");
++    }
++    else if (!strncmp(command, "wrapon", 6))
++    {
++        gtimeDoctorDataWrapAllowed = 1;
++        printk("wrap:on\n");
++    }
++    else if (!strncmp(command, "wrapoff", 7))
++    {
++        gtimeDoctorDataWrapAllowed = 0;
++        gtimeDoctorDataWrapped = 0;
++        printk("wrap:off\n");
++    }
++    else if (!strncmp(command, "status", 6))
++    {
++        if (debug_level)
++        {
++            printk("debug_level:on\n");
++        }
++        else
++        {
++            printk("debug_level:off\n");
++        }
++    }
++    else if (!strncmp(command, "reset", 5))
++    {
++        timeDoctor_Reset();
++    }
++
++    return count;
++} /* End of timeDoctor_WriteProc */
++
++/*=============================================================================
++| Module functions                                                            |
++==============================================================================*/
++
++void
++timeDoctor_Info(
++        unsigned int data1,
++        unsigned int data2,
++        unsigned int data3)
++{
++    unsigned int time, status;
++
++    /* Read status, disable ints */
++    __asm__ __volatile__ (
++            ".set push\n"
++            ".set nomips16\n"
++            "mfc0 %0, $12, 0\n"
++            "di\n"
++            ".set pop"
++            : "=r" (status) );
++
++    if (debug_level)
++    {
++        /* Read the time counter (config: free running counter) */
++        time = *(volatile unsigned int*) 0xb7e07014;
++
++        gtimeDoctorData[gtimeDoctorIndex][0] = time;
++        gtimeDoctorData[gtimeDoctorIndex][1] = data1;
++        gtimeDoctorData[gtimeDoctorIndex][2] = data2;
++        gtimeDoctorData[gtimeDoctorIndex][3] = data3;
++        gtimeDoctorIndex++;
++
++        if (gtimeDoctorIndex >= NB_DATA)
++        {
++            if (gtimeDoctorDataWrapAllowed)
++            {
++                gtimeDoctorIndex = 0;
++                gtimeDoctorDataWrapped = 1;
++            }
++            else
++            {
++                debug_level = 0;
++            }
++        }
++    }
++
++    /* Restore previous interrupt state */
++    __asm__ __volatile__ (
++            ".set push\n"
++            ".set nomips16\n"
++            "mtc0 %0, $12, 0\n"
++            ".set pop"
++            : : "r" (status) );
++} /* End of log_info */
++
++EXPORT_SYMBOL(timeDoctor_Info);
++
++void
++timeDoctor_SetLevel(
++        int level)
++{
++    unsigned int status;
++    /* Read status, disable ints */
++    __asm__ __volatile__ (
++            ".set push\n"
++            ".set nomips16\n"
++            "mfc0 %0, $12, 0\n"
++            "di\n"
++            ".set pop"
++            : "=r" (status) );
++    debug_level = level;
++    /* Restore previous interrupt state */
++    __asm__ __volatile__ (
++            ".set push\n"
++            ".set nomips16\n"
++            "mtc0 %0, $12, 0\n"
++            ".set pop"
++            : : "r" (status) );
++} /* End of timeDoctor_SetLevel */
++EXPORT_SYMBOL(timeDoctor_SetLevel);
++
++void
++timeDoctor_Reset(
++        void)
++{
++    unsigned int status;
++
++    /* Read status, disable ints */
++    __asm__ __volatile__ (
++            ".set push\n"
++            ".set nomips16\n"
++            "mfc0 %0, $12, 0\n"
++            "di\n"
++            ".set pop"
++            : "=r" (status) );
++    gtimeDoctorIndex = 0;
++    gtimeDoctorDataWrapped = 0;
++    /* Restore previous interrupt state */
++    __asm__ __volatile__ (
++            ".set push\n"
++            ".set nomips16\n"
++            "mtc0 %0, $12, 0\n"
++            ".set pop"
++            : : "r" (status) );
++} /* End of timeDoctor_Reset */
++EXPORT_SYMBOL(timeDoctor_Reset);
++
++static int timeDoctor_GetEntries(void)
++{
++    if (gtimeDoctorDataWrapped)
++    {
++        return NB_DATA * NB_FIELDS_PER_RECORD;
++    }
++    else
++    {
++        return gtimeDoctorIndex * NB_FIELDS_PER_RECORD;
++    }
++}
++
++static long timedoctor_Ioctl( struct file           *filp,
++                             unsigned int           cmd,
++                             unsigned long          arg );
++
++static int timedoctor_Mmap ( struct file           *file,
++                             struct vm_area_struct *vma );
++
++static struct file_operations gtimeDoctorFops = {
++     .unlocked_ioctl =  timedoctor_Ioctl,
++     .mmap  =  timedoctor_Mmap
++};
++
++static struct miscdevice gtimeDoctorMiscDev = {
++     .minor =    MISC_DYNAMIC_MINOR,
++     .name  =    TIME_DOCTOR_DEVNAME,
++     .fops  =   &gtimeDoctorFops
++};
++
++static long timedoctor_Ioctl( struct file   *filp,
++                             unsigned int   cmd,
++                             unsigned long  arg )
++{
++    switch (cmd)
++    {
++        case TIMEDOCTOR_IOCTL_RESET:
++            timeDoctor_Reset();
++            return 0;
++
++        case TIMEDOCTOR_IOCTL_START:
++            timeDoctor_SetLevel(1);
++            return 0;
++
++        case TIMEDOCTOR_IOCTL_STOP:
++            timeDoctor_SetLevel(0);
++            return 0;
++
++        case TIMEDOCTOR_IOCTL_GET_ENTRIES:
++            return timeDoctor_GetEntries();
++
++        case TIMEDOCTOR_IOCTL_GET_MAX_ENTRIES:
++            return (NB_DATA*NB_FIELDS_PER_RECORD);
++
++        case TIMEDOCTOR_IOCTL_INFO:
++            {
++                unsigned int data[TIMEDOCTOR_INFO_DATASIZE];
++                if(copy_from_user(&data, (unsigned int *) arg, sizeof(unsigned int) * TIMEDOCTOR_INFO_DATASIZE))
++                    return -EINVAL;
++                timeDoctor_Info(data[0], data[1], data[2]);
++            }
++            return 0;
++    }
++
++    return -ENOSYS;
++}
++
++static int timedoctor_Mmap ( struct file           *file,
++                             struct vm_area_struct *vma )
++{
++     unsigned int size;
++     if (vma->vm_pgoff != 0)
++     {
++          return -EINVAL;
++     }
++
++     size = vma->vm_end - vma->vm_start;
++     if (size != PAGE_ALIGN(DATA_SIZE))
++     {
++          return -EINVAL;
++     }
++
++     /* Prevent the swapper from considering these pages for swap and touching them */
++     vma->vm_flags |= VM_DONTDUMP | VM_DONTEXPAND;
++
++     return remap_pfn_range(vma, vma->vm_start, page_to_pfn(gtimeDoctorSharedPage), size, vma->vm_page_prot);
++}
++
++/** Module initialisation. */
++static int __init
++timeDoctor_Init(
++        void)
++{
++    int ret;
++
++    ret = timeDoctor_BufferInit();
++    if (ret < 0)
++    {
++        printk(KERN_ERR "can't init Timedoctor buffer\n");
++        return ret;
++    }
++    timeDoctor_Reset();
++
++    /* Register a misc device called "timedoctor". */
++    ret = misc_register( &gtimeDoctorMiscDev );
++    if (ret < 0)
++    {
++        printk("can't register misc device (minor %d)!\n", gtimeDoctorMiscDev.minor );
++        return ret;
++    }
++
++    proc_create_data(TIME_DOCTOR_DEVNAME, S_IFREG | S_IRUGO | S_IWUSR, NULL, &timedoctor_proc_fops, NULL);
++    printk("%s [%i events]\n", TIME_DOCTOR_DESCRIPTION, NB_DATA);
++    return 0;
++} /* End of timeDoctor_Init */
++
++/** Module deinitialisation */
++static void __exit
++timeDoctor_Exit(
++        void)
++{
++    printk("Exiting %s\n", TIME_DOCTOR_DESCRIPTION);
++    debug_level = 0;
++
++    misc_deregister( &gtimeDoctorMiscDev );
++
++    ClearPageReserved(gtimeDoctorSharedPage);
++    free_pages((unsigned long)gtimeDoctorData, get_order(DATA_SIZE));
++
++    /* undo proc stuff */
++    remove_proc_entry(TIME_DOCTOR_DEVNAME, NULL);
++
++} /* End of timeDoctor_Exit */
++
++module_init(timeDoctor_Init);
++module_exit(timeDoctor_Exit);

@@ -1,7 +1,7 @@
-diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/net/ethernet/ip3902.c
---- linux-5.4.22.orig/drivers/net/ethernet/ip3902.c	1970-01-01 03:00:00.000000000 +0300
-+++ linux-5.4.22/drivers/net/ethernet/ip3902.c	2020-02-25 12:32:07.174669897 +0300
-@@ -0,0 +1,1649 @@
+diff -Naur linux-5.4.28.orig/drivers/net/ethernet/ip3902.c linux-5.4.28/drivers/net/ethernet/ip3902.c
+--- linux-5.4.28.orig/drivers/net/ethernet/ip3902.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.4.28/drivers/net/ethernet/ip3902.c	2020-04-14 14:48:55.227565156 +0300
+@@ -0,0 +1,1750 @@
 +/* drivers/net/ip3902.c
 + *
 + * Copyright 2008 NXP Semiconductors
@@ -240,6 +240,16 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +#define RSV_RECEIVE_CODE_VIOLATION	(1 << 19)
 +#define RSV_MASK			0xFFFF
 +
++#if defined(CONFIG_IP3902_RX_IRQ) || defined(CONFIG_IP3902_RX_NAPI)
++#define IP3902_RX_DONE_INT RX_DONE_INT
++#define IP3902_RX_CONTROL_INT RX_CONTROL_INT
++#elif defined(CONFIG_IP3902_RX_TIMER)
++#define IP3902_RX_DONE_INT 0
++#define IP3902_RX_CONTROL_INT 0
++#else
++#error unknown method
++#endif
++
 +#ifdef IP3902_POWERDOWN_PHY_ON_SUSPEND
 +static int keep_phy_control=0;
 +#endif
@@ -290,11 +300,15 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +
 +	unsigned char running;
 +	unsigned char resume_open;
-+
++#ifdef CONFIG_IP3902_RX_NAPI
++	struct napi_struct napi;
++#elif defined(CONFIG_IP3902_RX_TIMER)
 +	struct timer_list rx_timer;		/* RX-queue timer. */
++#endif
 +
 +	struct timer_list timer;		/* Media check timer. */
 +
++	unsigned int int_en_mask; /* Interrupt enable mask */
 +	spinlock_t int_lock; /* Interrupt lock */
 +};
 +
@@ -490,7 +504,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +				skb_reserve(skb, (dma_get_cache_alignment() - unaligned));
 +			}
 +			desc_address = dma_map_single(&ip3902_priv->pdev->dev, skb->data, ETH_RX_SKB_SIZE, DMA_FROM_DEVICE);
-+			ip3902_write_rx_desc(ip3902_priv, rx_index, desc_address, (ETH_RX_SKB_SIZE -1));
++			ip3902_write_rx_desc(ip3902_priv, rx_index, desc_address, (ETH_RX_SKB_SIZE -1) | IP3902_RX_CONTROL_INT);
 +
 +			ip3902_priv->rx_skb[rx_index] = skb;
 +			ip3902_priv->rx_next_allocate = NEXT_RX(rx_index);
@@ -517,7 +531,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +		return 0;
 +
 +#if defined (CONFIG_TIME_DOCTOR)
-+	timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("RX"), CHAR_ARRAY_TO_U32("3902"));
++	timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("RX  "), CHAR_ARRAY_TO_U32("3902"));
 +#endif
 +
 +	do
@@ -569,7 +583,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +					/* store current ring pointer state */
 +					ip3902_priv->rx_next_consume = rx_index;
 +#if defined (CONFIG_TIME_DOCTOR)
-+					timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("RX"), CHAR_ARRAY_TO_U32("3902"));
++					timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("RX  "), CHAR_ARRAY_TO_U32("3902"));
 +#endif
 +					return received;
 +				}
@@ -588,9 +602,17 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +					}
 +					skb_put(skb, length - BYTES_IN_ETHERNET_CRC);
 +					skb->protocol = eth_type_trans(skb, ndev);
-+
++#if defined (CONFIG_TIME_DOCTOR)
++					timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("RSKB"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++#ifdef CONFIG_IP3902_RX_NAPI
++					netif_receive_skb(skb);
++#else
 +					netif_rx(skb);
-+
++#endif
++#if defined (CONFIG_TIME_DOCTOR)
++					timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("RSKB"), CHAR_ARRAY_TO_U32("3902"));
++#endif
 +					ip3902_read_rx_desc(ip3902_priv, rx_index, &data_addr, &data_length);
 +					dma_unmap_single(&ip3902_priv->pdev->dev, data_addr, ETH_RX_SKB_SIZE, DMA_FROM_DEVICE);
 +
@@ -601,13 +623,18 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +			rx_index = NEXT_RX(rx_index);
 +		}
 +
++#if defined(CONFIG_IP3902_RX_IRQ) || defined(CONFIG_IP3902_RX_NAPI)
++		ip3902_write_reg(ndev, INT_CLEAR_REG, RX_DONE_INT);
++		ip3902_write_reg(ndev, INT_CLEAR_REG, 0);
++#endif
++
 +		ip3902_priv->rx_next_consume = rx_index;
 +		ip3902_eth_rx_refill_descs(ndev, ip3902_priv);
 +		write_index = ip3902_read_reg(ndev, RX_PRODUCE_INDEX_REG);
 +	} while (limit != write_index);
 +
 +#if defined (CONFIG_TIME_DOCTOR)
-+	timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("RX"), CHAR_ARRAY_TO_U32("3902"));
++	timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("RX  "), CHAR_ARRAY_TO_U32("3902"));
 +#endif
 +
 +	return received;
@@ -762,6 +789,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	ip3902_write_reg(ndev, MAC1_REG, val);
 +}
 +
++#ifdef CONFIG_IP3902_RX_TIMER
 +/*
 + * RX-queue timer
 + */
@@ -775,6 +803,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	ip3902_priv->rx_timer.expires = jiffies + 1;
 +	add_timer(&ip3902_priv->rx_timer);
 +}
++#endif
 +
 +/*
 + * Media and Link monitoring timer
@@ -798,12 +827,34 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +{
 +	unsigned long flags;
 +
++#if defined(CONFIG_IP3902_RX_IRQ) || defined(CONFIG_IP3902_RX_NAPI)
++	if (status & RX_DONE_INT)
++	{
++#if defined(CONFIG_IP3902_RX_IRQ)
++		ip3902_eth_receive_queue(ndev, ip3902_priv, RX_RING_SIZE);
++#else
++#if defined (CONFIG_TIME_DOCTOR)
++		timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("DISI"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++		spin_lock_irqsave(&ip3902_priv->int_lock, flags);
++		ip3902_priv->int_en_mask &= ~RX_DONE_INT;
++		ip3902_write_reg(ndev, INT_ENABLE_REG, ip3902_priv->int_en_mask);
++		spin_unlock_irqrestore(&ip3902_priv->int_lock, flags);
++		napi_schedule(&ip3902_priv->napi);
++#if defined (CONFIG_TIME_DOCTOR)
++		timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("DISI"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++#endif
++	}
++#endif
++
 +	if (status & TX_FINISHED_INT)
 +	{
 +		ip3902_write_reg(ndev, INT_CLEAR_REG, TX_FINISHED_INT);
 +		ip3902_write_reg(ndev, INT_CLEAR_REG, 0);
 +		spin_lock_irqsave(&ip3902_priv->int_lock, flags);
-+		ip3902_write_reg(ndev, INT_ENABLE_REG, (TX_UNDERRUN_INT | RX_OVERRUN_INT));
++		ip3902_priv->int_en_mask &= ~TX_FINISHED_INT;
++		ip3902_write_reg(ndev, INT_ENABLE_REG, ip3902_priv->int_en_mask);
 +		spin_unlock_irqrestore(&ip3902_priv->int_lock, flags);
 +		if(netif_queue_stopped(ndev))
 +			netif_wake_queue(ndev);
@@ -846,7 +897,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	struct ip3902_private *ip3902_priv = netdev_priv(ndev);
 +	unsigned long status;
 +
-+	status = ip3902_read_reg(ndev, INT_STATUS_REG) & (TX_FINISHED_INT | TX_UNDERRUN_INT | RX_OVERRUN_INT);
++	status = ip3902_read_reg(ndev, INT_STATUS_REG) & ip3902_priv->int_en_mask;
 +	do
 +	{
 +		if (!status)
@@ -860,7 +911,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +		else
 +		{
 +			ip3902_do_handle_interrupt(ndev, ip3902_priv, status);
-+			status = ip3902_read_reg(ndev, INT_STATUS_REG) & (TX_FINISHED_INT | TX_UNDERRUN_INT | RX_OVERRUN_INT);
++			status = ip3902_read_reg(ndev, INT_STATUS_REG) & ip3902_priv->int_en_mask;
 +		}
 +	} while (status);
 +
@@ -973,14 +1024,15 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	BUG_ON(netif_queue_stopped(ndev));
 +	BUG_ON(skb == NULL);
 +#if defined (CONFIG_TIME_DOCTOR)
-+	timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("TX"), CHAR_ARRAY_TO_U32("3902"));
++	timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("TX  "), CHAR_ARRAY_TO_U32("3902"));
 +#endif
 +
 +	ret = ip3902_submit_skb_for_tx (ndev, skb);
 +	if (ret) {
 +		netif_stop_queue(ndev);
 +		spin_lock_irqsave(&ip3902_priv->int_lock, flags);
-+		ip3902_write_reg(ndev, INT_ENABLE_REG, (TX_FINISHED_INT | TX_UNDERRUN_INT | RX_OVERRUN_INT));
++		ip3902_priv->int_en_mask |= TX_FINISHED_INT;
++		ip3902_write_reg(ndev, INT_ENABLE_REG, ip3902_priv->int_en_mask);
 +		spin_unlock_irqrestore(&ip3902_priv->int_lock, flags);
 +		ret = NETDEV_TX_BUSY;
 +	} else {
@@ -988,7 +1040,7 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +		ndev->stats.tx_packets++;
 +	}
 +#if defined (CONFIG_TIME_DOCTOR)
-+	timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("TX"), CHAR_ARRAY_TO_U32("3902"));
++	timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("TX  "), CHAR_ARRAY_TO_U32("3902"));
 +#endif
 +
 +	return ret;		/* success */
@@ -1183,10 +1235,14 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +
 +static void ip3902_hw_deinit(struct net_device *ndev)
 +{
++#ifdef CONFIG_IP3902_RX_TIMER
 +	struct ip3902_private *ip3902_priv = netdev_priv(ndev);
++#endif
 +	unsigned long val;
 +
++#ifdef CONFIG_IP3902_RX_TIMER
 +	del_timer(&ip3902_priv->rx_timer);
++#endif
 +
 +	/* Stop Rx and Tx hardware and disable interrupts */
 +	val = ip3902_read_reg(ndev, COMMAND_REG);
@@ -1301,15 +1357,18 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +		/* Clear all interrupts, and enable interesting interrupts */
 +		ip3902_write_reg(ndev, INT_CLEAR_REG, 0xffffffff);
 +		ip3902_write_reg(ndev, INT_CLEAR_REG, 0);
-+		ip3902_write_reg(ndev, INT_ENABLE_REG, (TX_UNDERRUN_INT | RX_OVERRUN_INT));
++		ip3902_priv->int_en_mask = (TX_UNDERRUN_INT | RX_OVERRUN_INT | IP3902_RX_DONE_INT);
++		ip3902_write_reg(ndev, INT_ENABLE_REG, ip3902_priv->int_en_mask);
 +
 +		/* Start Tx and Rx hardware */
 +		ip3902_start_tx(ndev);
 +		ip3902_start_rx(ndev);
 +
++#ifdef CONFIG_IP3902_RX_TIMER
 +		timer_setup(&ip3902_priv->rx_timer, ip3902_rx_timer, 0);
 +		ip3902_priv->rx_timer.expires = jiffies + 1;
 +		add_timer(&ip3902_priv->rx_timer);
++#endif
 +	}
 +	return 0;
 +}
@@ -1338,6 +1397,9 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	set_duplex_mode(ndev, ip3902_priv->mii.full_duplex);
 +
 +	netif_start_queue(ndev);
++#ifdef CONFIG_IP3902_RX_NAPI
++	napi_enable(&ip3902_priv->napi);
++#endif
 +
 +	timer_setup(&ip3902_priv->timer, ip3902_timer, 0);
 +	ip3902_priv->timer.expires = jiffies + ((24 * HZ) / 10);
@@ -1357,9 +1419,10 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	ip3902_priv->running = 0;
 +	del_timer(&ip3902_priv->timer);
 +	wmb();
-+
++#ifdef CONFIG_IP3902_RX_NAPI
++	napi_disable(&ip3902_priv->napi);
++#endif
 +	ip3902_hw_deinit(ndev);
-+
 +	netif_stop_queue(ndev);
 +
 +	ip3902_eth_free_all_tx_descs(ndev, ip3902_priv);
@@ -1446,6 +1509,40 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +#endif
 +};
 +
++#ifdef CONFIG_IP3902_RX_NAPI
++static int napi_rx_handler(struct napi_struct *napi, int budget)
++{
++	struct ip3902_private *ip3902_priv = container_of(napi, struct ip3902_private, napi);
++	unsigned long flags;
++	int rx_done;
++
++#if defined (CONFIG_TIME_DOCTOR)
++	timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("POLL"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++
++	rx_done = ip3902_eth_receive_queue(ip3902_priv->ndev, ip3902_priv, RX_RING_SIZE);
++	if(rx_done < budget) {
++#if defined (CONFIG_TIME_DOCTOR)
++		timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("CPLT"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++		napi_complete_done(napi, rx_done);
++		spin_lock_irqsave(&ip3902_priv->int_lock, flags);
++		ip3902_priv->int_en_mask |= RX_DONE_INT;
++		ip3902_write_reg(ip3902_priv->ndev, INT_ENABLE_REG, ip3902_priv->int_en_mask);
++		spin_unlock_irqrestore(&ip3902_priv->int_lock, flags);
++#if defined (CONFIG_TIME_DOCTOR)
++		timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("CPLT"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++	}
++
++#if defined (CONFIG_TIME_DOCTOR)
++	timeDoctor_Info(TDI_COMMAND(TDI_STOP, TDI_EVENT), CHAR_ARRAY_TO_U32("POLL"), CHAR_ARRAY_TO_U32("3902"));
++#endif
++
++	return rx_done;
++}
++#endif
++
 +static int ip3902_init_dev(struct net_device *ndev, struct ip3902_private *ip3902_priv)
 +{
 +	int ret;
@@ -1465,8 +1562,10 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +		ip3902_priv->mii.mdio_write	= ip3902_mdio_write;
 +		ip3902_priv->mii.dev		= ndev;
 +
++#ifdef CONFIG_IP3902_RX_NAPI
++		netif_napi_add(ndev, &ip3902_priv->napi, napi_rx_handler, RX_RING_SIZE);
++#endif
 +		ret = register_netdev(ndev);
-+
 +		if (ret)
 +		{
 +			ip3902_hw_shutdown(ndev, ip3902_priv);
@@ -1484,7 +1583,9 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +	platform_set_drvdata(pdev, NULL);
 +
 +	unregister_netdev(ndev);
-+
++#ifdef CONFIG_IP3902_RX_NAPI
++	netif_napi_del(&ip3902_priv->napi);
++#endif
 +	iounmap(ip3902_priv->mem);
 +	release_resource(ip3902_priv->bus);
 +	kfree(ip3902_priv->bus);
@@ -1651,10 +1752,10 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/ip3902.c linux-5.4.22/drivers/
 +MODULE_DESCRIPTION("NXP ip3902 10/100 Ethernet platform driver");
 +MODULE_AUTHOR("Chris Steel, <chris.steel@nxp.com>");
 +MODULE_LICENSE("GPL v2");
-diff -Naur linux-5.4.22.orig/drivers/net/ethernet/Kconfig linux-5.4.22/drivers/net/ethernet/Kconfig
---- linux-5.4.22.orig/drivers/net/ethernet/Kconfig	2020-02-24 10:37:04.000000000 +0300
-+++ linux-5.4.22/drivers/net/ethernet/Kconfig	2020-02-25 12:31:39.890887943 +0300
-@@ -183,4 +183,13 @@
+diff -Naur linux-5.4.28.orig/drivers/net/ethernet/Kconfig linux-5.4.28/drivers/net/ethernet/Kconfig
+--- linux-5.4.28.orig/drivers/net/ethernet/Kconfig	2020-03-25 10:26:00.000000000 +0300
++++ linux-5.4.28/drivers/net/ethernet/Kconfig	2020-04-14 14:42:13.063970332 +0300
+@@ -183,4 +183,39 @@
  source "drivers/net/ethernet/xilinx/Kconfig"
  source "drivers/net/ethernet/xircom/Kconfig"
  
@@ -1667,10 +1768,36 @@ diff -Naur linux-5.4.22.orig/drivers/net/ethernet/Kconfig linux-5.4.22/drivers/n
 +	 This is a driver for NXP IP3902 ethernet hardware found
 +	 in PNX8335 and probably other SOCs.
 +
++if IP3902
++
++choice
++	prompt "IP3902 RX Mode"
++	default IP3902_RX_IRQ
++
++config IP3902_RX_NAPI
++	bool "RX with NAPI"
++	---help---
++	With NAPI, the softirq poll input queue.
++
++config IP3902_RX_IRQ
++	bool "RX in IRQ"
++	---help---
++	In IRQ mode, the received packet is passed to the netif_rx function.
++
++config IP3902_RX_TIMER
++	bool "RX in Timer"
++	---help---
++	In Timer mode, a check is made for the presence of a packet, 
++	 and if it is, it is passed to the netif_rx function.
++
++endchoice
++
++endif # IP3902
++
  endif # ETHERNET
-diff -Naur linux-5.4.22.orig/drivers/net/ethernet/Makefile linux-5.4.22/drivers/net/ethernet/Makefile
---- linux-5.4.22.orig/drivers/net/ethernet/Makefile	2020-02-24 10:37:04.000000000 +0300
-+++ linux-5.4.22/drivers/net/ethernet/Makefile	2020-02-25 12:31:39.890887943 +0300
+diff -Naur linux-5.4.28.orig/drivers/net/ethernet/Makefile linux-5.4.28/drivers/net/ethernet/Makefile
+--- linux-5.4.28.orig/drivers/net/ethernet/Makefile	2020-03-25 10:26:00.000000000 +0300
++++ linux-5.4.28/drivers/net/ethernet/Makefile	2020-04-14 14:42:37.515720916 +0300
 @@ -96,3 +96,4 @@
  obj-$(CONFIG_NET_VENDOR_XIRCOM) += xircom/
  obj-$(CONFIG_NET_VENDOR_SYNOPSYS) += synopsys/
