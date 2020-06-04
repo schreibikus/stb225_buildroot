@@ -4,66 +4,36 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-### Currently, the default Linux kernel is version 5.4.24
+### Currently, the default Linux kernel is version 5.4.43
 
-### For using Linux 4.4.215 by default
+### For using Linux 4.4.225 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.4.x"
-* Change "Kernel" -> "Kernel version" to "4.4.215"
+* Change "Kernel" -> "Kernel version" to "4.4.223"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.4-*.patch"
 
-### For using Linux 4.9.215 by default
+### For using Linux 4.9.225 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.9.x"
-* Change "Kernel" -> "Kernel version" to "4.9.215"
+* Change "Kernel" -> "Kernel version" to "4.9.223"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.9-*.patch"
 
-### For using Linux 4.14.172 by default
+### For using Linux 4.14.182 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.14.x"
-* Change "Kernel" -> "Kernel version" to "4.14.172"
+* Change "Kernel" -> "Kernel version" to "4.14.180"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 4.19.108 by default
+### For using Linux 4.19.125 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.19.x"
-* Change "Kernel" -> "Kernel version" to "4.19.108"
+* Change "Kernel" -> "Kernel version" to "4.19.122"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 4.20.17 by default
+### For using Linux 5.6.15 by default
 Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "4.20.x"
-* Change "Kernel" -> "Kernel version" to "4.20.17"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
-
-### For using Linux 5.0.21 by default
-Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.0.x"
-* Change "Kernel" -> "Kernel version" to "5.0.21"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
-
-### For using Linux 5.1.21 by default
-Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.1.x"
-* Change "Kernel" -> "Kernel version" to "5.1.21"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.20-*.patch"
-
-### For using Linux 5.2.21 by default
-Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.2.x"
-* Change "Kernel" -> "Kernel version" to "5.2.21"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.2-*.patch"
-
-### For using Linux 5.3.18 by default
-Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.3.x"
-* Change "Kernel" -> "Kernel version" to "5.3.18"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.2-*.patch"
-
-### For using Linux 5.5.8 by default
-Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.4.x or later"
-* Change "Kernel" -> "Kernel version" to "5.5.8"
+* Change "Toolchain" -> "Custom kernel headers series" to "5.6.x or later"
+* Change "Kernel" -> "Kernel version" to "5.6.12"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.5-*.patch"
 
 ## Build Linux image
@@ -92,15 +62,6 @@ setenv bootcmd 'nand read 0x80800000 Kernel; run setargs; bootm 0x80800000'
 saveenv
 
 ## Preparation in Linux:
-To get access to transmission web interface open /mnt/nand/transmission/settings.json file by vi editor
-and change line from
-
-"rpc-whitelist": "127.0.0.1",
-
-to
-
-"rpc-whitelist": "127.0.0.1,192.168.*.*",
-
 For mounting FAT USB-flash drive add following line in /mnt/nand/fstab file:
 
 /dev/sda1 /mnt/downloads   vfat  iocharset=utf8,uid=1000,gid=1000 0 0
