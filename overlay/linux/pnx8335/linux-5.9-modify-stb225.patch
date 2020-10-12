@@ -1,0 +1,86 @@
+diff -Naur linux-5.9.orig/arch/mips/include/asm/mach-pnx833x/gpio.h linux-5.9/arch/mips/include/asm/mach-pnx833x/gpio.h
+--- linux-5.9.orig/arch/mips/include/asm/mach-pnx833x/gpio.h	2020-10-12 00:15:50.000000000 +0300
++++ linux-5.9/arch/mips/include/asm/mach-pnx833x/gpio.h	2020-10-12 10:28:52.824996132 +0300
+@@ -25,10 +25,6 @@
+ /* Initialize GPIO to a known state */
+ static inline void pnx833x_gpio_init(void)
+ {
+-	PNX833X_PIO_DIR = 0;
+-	PNX833X_PIO_DIR2 = 0;
+-	PNX833X_PIO_SEL = 0;
+-	PNX833X_PIO_SEL2 = 0;
+ 	PNX833X_PIO_INT_EDGE = 0;
+ 	PNX833X_PIO_INT_HI = 0;
+ 	PNX833X_PIO_INT_LO = 0;
+diff -Naur linux-5.9.orig/arch/mips/pnx833x/stb22x/board.c linux-5.9/arch/mips/pnx833x/stb22x/board.c
+--- linux-5.9.orig/arch/mips/pnx833x/stb22x/board.c	2020-10-12 00:15:50.000000000 +0300
++++ linux-5.9/arch/mips/pnx833x/stb22x/board.c	2020-10-12 10:28:52.824996132 +0300
+@@ -58,18 +58,15 @@
+ 
+ void __init pnx833x_board_setup(void)
+ {
+-	pnx833x_gpio_select_function_alt(4);
+-	pnx833x_gpio_select_output(4);
+-	pnx833x_gpio_select_function_alt(5);
+-	pnx833x_gpio_select_input(5);
+-	pnx833x_gpio_select_function_alt(6);
+-	pnx833x_gpio_select_input(6);
+-	pnx833x_gpio_select_function_alt(7);
+-	pnx833x_gpio_select_output(7);
++	PNX833X_REG(0x9204) = 0x03; // CLK_PCP_CTL PI-bus 80 Mhz
+ 
++#if defined(CONFIG_USB) || defined(CONFIG_USB_MODULE)
+ 	pnx833x_gpio_select_function_alt(25);
+ 	pnx833x_gpio_select_function_alt(26);
++#endif
+ 
++#if defined(CONFIG_IP3902) || defined(CONFIG_IP3902_MODULE)
++	/* Configure GPIOs 27-33 for MII interface to Ethernet phy */
+ 	pnx833x_gpio_select_function_alt(27);
+ 	pnx833x_gpio_select_function_alt(28);
+ 	pnx833x_gpio_select_function_alt(29);
+@@ -77,44 +74,5 @@
+ 	pnx833x_gpio_select_function_alt(31);
+ 	pnx833x_gpio_select_function_alt(32);
+ 	pnx833x_gpio_select_function_alt(33);
+-
+-#if IS_ENABLED(CONFIG_MTD_NAND_PLATFORM)
+-	/* Setup MIU for NAND access on CS0...
+-	 *
+-	 * (it seems that we must also configure CS1 for reliable operation,
+-	 * otherwise the first read ID command will fail if it's read as 4 bytes
+-	 * but pass if it's read as 1 word.)
+-	 */
+-
+-	/* Setup MIU CS0 & CS1 timing */
+-	PNX833X_MIU_SEL0 = 0;
+-	PNX833X_MIU_SEL1 = 0;
+-	PNX833X_MIU_SEL0_TIMING = 0x50003081;
+-	PNX833X_MIU_SEL1_TIMING = 0x50003081;
+-
+-	/* Setup GPIO 00 for use as MIU CS1 (CS0 is not multiplexed, so does not need this) */
+-	pnx833x_gpio_select_function_alt(0);
+-
+-	/* Setup GPIO 04 to input NAND read/busy signal */
+-	pnx833x_gpio_select_function_io(4);
+-	pnx833x_gpio_select_input(4);
+-
+-	/* Setup GPIO 05 to disable NAND write protect */
+-	pnx833x_gpio_select_function_io(5);
+-	pnx833x_gpio_select_output(5);
+-	pnx833x_gpio_write(1, 5);
+-
+-#elif IS_ENABLED(CONFIG_MTD_CFI)
+-
+-	/* Set up MIU for 16-bit NOR access on CS0 and CS1... */
+-
+-	/* Setup MIU CS0 & CS1 timing */
+-	PNX833X_MIU_SEL0 = 1;
+-	PNX833X_MIU_SEL1 = 1;
+-	PNX833X_MIU_SEL0_TIMING = 0x6A08D082;
+-	PNX833X_MIU_SEL1_TIMING = 0x6A08D082;
+-
+-	/* Setup GPIO 00 for use as MIU CS1 (CS0 is not multiplexed, so does not need this) */
+-	pnx833x_gpio_select_function_alt(0);
+ #endif
+ }
