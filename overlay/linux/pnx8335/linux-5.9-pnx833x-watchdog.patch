@@ -1,6 +1,6 @@
 diff -Naur linux-5.9.orig/drivers/watchdog/Kconfig linux-5.9/drivers/watchdog/Kconfig
 --- linux-5.9.orig/drivers/watchdog/Kconfig	2020-10-12 00:15:50.000000000 +0300
-+++ linux-5.9/drivers/watchdog/Kconfig	2020-10-12 10:28:59.284880633 +0300
++++ linux-5.9/drivers/watchdog/Kconfig	2020-10-14 16:51:58.359625993 +0300
 @@ -1686,7 +1686,7 @@
  config PNX833X_WDT
  	tristate "PNX833x Hardware Watchdog"
@@ -12,8 +12,8 @@ diff -Naur linux-5.9.orig/drivers/watchdog/Kconfig linux-5.9/drivers/watchdog/Kc
  	  watchdog timer that will reboot the machine after a programmable
 diff -Naur linux-5.9.orig/drivers/watchdog/pnx833x_wdt.c linux-5.9/drivers/watchdog/pnx833x_wdt.c
 --- linux-5.9.orig/drivers/watchdog/pnx833x_wdt.c	2020-10-12 00:15:50.000000000 +0300
-+++ linux-5.9/drivers/watchdog/pnx833x_wdt.c	2020-10-12 10:28:59.284880633 +0300
-@@ -17,66 +17,81 @@
++++ linux-5.9/drivers/watchdog/pnx833x_wdt.c	2020-10-14 16:51:58.359625993 +0300
+@@ -17,21 +17,10 @@
  
  #include <linux/module.h>
  #include <linux/moduleparam.h>
@@ -32,28 +32,18 @@ diff -Naur linux-5.9.orig/drivers/watchdog/pnx833x_wdt.c linux-5.9/drivers/watch
 -#define WATCHDOG_COUNT_FREQUENCY 68000000U /* Watchdog counts at 68MHZ. */
 -#define	PNX_WATCHDOG_TIMEOUT	(WATCHDOG_TIMEOUT * WATCHDOG_COUNT_FREQUENCY)
 -#define PNX_TIMEOUT_VALUE	2040000000U
-+#define WATCHDOG_DEFAULT_TIMEOUT		30
++#define WATCHDOG_DEFAULT_TIMEOUT 30
  
  /** CONFIG block */
--#define PNX833X_CONFIG                      (0x07000U)
--#define PNX833X_CONFIG_CPU_WATCHDOG         (0x54)
--#define PNX833X_CONFIG_CPU_WATCHDOG_COMPARE (0x58)
--#define PNX833X_CONFIG_CPU_COUNTERS_CONTROL (0x1c)
-+#define PNX833X_CONFIG				(0x07000U)
-+#define PNX833X_CONFIG_CPU_WATCHDOG		(0x54)
-+#define PNX833X_CONFIG_CPU_WATCHDOG_COMPARE	(0x58)
-+#define PNX833X_CONFIG_CPU_COUNTERS_CONTROL	(0x1c)
- 
- /** RESET block */
--#define PNX833X_RESET                       (0x08000U)
--#define PNX833X_RESET_CONFIG                (0x08)
-+#define PNX833X_RESET				(0x08000U)
-+#define PNX833X_RESET_CONFIG			(0x08)
+ #define PNX833X_CONFIG                      (0x07000U)
+@@ -43,40 +32,66 @@
+ #define PNX833X_RESET                       (0x08000U)
+ #define PNX833X_RESET_CONFIG                (0x08)
  
 -static int pnx833x_wdt_alive;
 +/** CLOCK block */
-+#define PNX833X_CLOCK				(0x09000U)
-+#define PNX833X_CLOCK_PCP_CTL			(0x204)
++#define PNX833X_CLOCK                       (0x09000U)
++#define PNX833X_CLOCK_PCP_CTL               (0x204)
 +
 +#define get_pnx833x_wdd(wdd_) container_of(wdd_, struct pnx833x_wdt, wdd)
 +
@@ -69,8 +59,8 @@ diff -Naur linux-5.9.orig/drivers/watchdog/pnx833x_wdt.c linux-5.9/drivers/watch
  module_param(pnx833x_wdt_timeout, int, 0);
 -MODULE_PARM_DESC(timeout, "Watchdog timeout in Mhz. (68Mhz clock), default="
 -			__MODULE_STRING(PNX_TIMEOUT_VALUE) "(30 seconds).");
-+MODULE_PARM_DESC(timeout, "Watchdog timeout in seconds. default="
-+		__MODULE_STRING(WATCHDOG_DEFAULT_TIMEOUT) "(30 seconds).");
++MODULE_PARM_DESC(timeout, "Watchdog timeout in seconds (default="
++		__MODULE_STRING(WATCHDOG_DEFAULT_TIMEOUT) ")");
  
  static bool nowayout = WATCHDOG_NOWAYOUT;
  module_param(nowayout, bool, 0);
@@ -325,7 +315,7 @@ diff -Naur linux-5.9.orig/drivers/watchdog/pnx833x_wdt.c linux-5.9/drivers/watch
 -		return ret;
 +	pnx833x_wdd.clock_frequency = pnx833x_pibus_hz();
 +	if (pnx833x_wdd.clock_frequency == 0) {
-+		pr_err("Invalid clock frequency");
++		pr_err("Invalid WDT clock frequency");
 +		return -EINVAL;
  	}
  
