@@ -42,6 +42,12 @@ Make the following configuration changes:
 * Change "Kernel" -> "Kernel version" to "5.9.8"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.9-*.patch"
 
+### For using Linux 5.10 by default
+Make the following configuration changes:
+* Change "Toolchain" -> "Custom kernel headers series" to "5.7.x or later"
+* Change "Kernel" -> "Kernel version" to "5.10"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.10-*.patch"
+
 ## Build Linux image
 To build the image run make in this directory.
 Please find image at buildroot-*/output/images
