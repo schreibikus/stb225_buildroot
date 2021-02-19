@@ -1,0 +1,2497 @@
+diff -Naur linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/gpio.h linux-5.11/arch/mips/include/asm/mach-pnx833x/gpio.h
+--- linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/gpio.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/include/asm/mach-pnx833x/gpio.h	2021-02-19 16:02:12.876699550 +0300
+@@ -0,0 +1,155 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ *  gpio.h: GPIO Support for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ */
++#ifndef __ASM_MIPS_MACH_PNX833X_GPIO_H
++#define __ASM_MIPS_MACH_PNX833X_GPIO_H
++
++/* BIG FAT WARNING: races danger!
++   No protections exist here. Current users are only early init code,
++   when locking is not needed because no concurrency yet exists there,
++   and GPIO IRQ dispatcher, which does locking.
++   However, if many uses will ever happen, proper locking will be needed
++   - including locking between different uses
++*/
++
++#include <asm/mach-pnx833x/pnx833x.h>
++
++#define SET_REG_BIT(reg, bit)		do { (reg |= (1 << (bit))); } while (0)
++#define CLEAR_REG_BIT(reg, bit)		do { (reg &= ~(1 << (bit))); } while (0)
++
++/* Initialize GPIO to a known state */
++static inline void pnx833x_gpio_init(void)
++{
++	PNX833X_PIO_INT_EDGE = 0;
++	PNX833X_PIO_INT_HI = 0;
++	PNX833X_PIO_INT_LO = 0;
++
++	/* clear any GPIO interrupt requests */
++	PNX833X_PIO_INT_CLEAR = 0xffff;
++	PNX833X_PIO_INT_CLEAR = 0;
++	PNX833X_PIO_INT_ENABLE = 0;
++}
++
++/* Select GPIO direction for a pin */
++static inline void pnx833x_gpio_select_input(unsigned int pin)
++{
++	if (pin < 32)
++		CLEAR_REG_BIT(PNX833X_PIO_DIR, pin);
++	else
++		CLEAR_REG_BIT(PNX833X_PIO_DIR2, pin & 31);
++}
++static inline void pnx833x_gpio_select_output(unsigned int pin)
++{
++	if (pin < 32)
++		SET_REG_BIT(PNX833X_PIO_DIR, pin);
++	else
++		SET_REG_BIT(PNX833X_PIO_DIR2, pin & 31);
++}
++
++/* Select GPIO or alternate function for a pin */
++static inline void pnx833x_gpio_select_function_io(unsigned int pin)
++{
++	if (pin < 32)
++		CLEAR_REG_BIT(PNX833X_PIO_SEL, pin);
++	else
++		CLEAR_REG_BIT(PNX833X_PIO_SEL2, pin & 31);
++}
++static inline void pnx833x_gpio_select_function_alt(unsigned int pin)
++{
++	if (pin < 32)
++		SET_REG_BIT(PNX833X_PIO_SEL, pin);
++	else
++		SET_REG_BIT(PNX833X_PIO_SEL2, pin & 31);
++}
++
++/* Read GPIO pin */
++static inline int pnx833x_gpio_read(unsigned int pin)
++{
++	if (pin < 32)
++		return (PNX833X_PIO_IN >> pin) & 1;
++	else
++		return (PNX833X_PIO_IN2 >> (pin & 31)) & 1;
++}
++
++/* Write GPIO pin */
++static inline void pnx833x_gpio_write(unsigned int val, unsigned int pin)
++{
++	if (pin < 32) {
++		if (val)
++			SET_REG_BIT(PNX833X_PIO_OUT, pin);
++		else
++			CLEAR_REG_BIT(PNX833X_PIO_OUT, pin);
++	} else {
++		if (val)
++			SET_REG_BIT(PNX833X_PIO_OUT2, pin & 31);
++		else
++			CLEAR_REG_BIT(PNX833X_PIO_OUT2, pin & 31);
++	}
++}
++
++/* Configure GPIO interrupt */
++#define GPIO_INT_NONE		0
++#define GPIO_INT_LEVEL_LOW	1
++#define GPIO_INT_LEVEL_HIGH	2
++#define GPIO_INT_EDGE_RISING	3
++#define GPIO_INT_EDGE_FALLING	4
++#define GPIO_INT_EDGE_BOTH	5
++static inline void pnx833x_gpio_setup_irq(int when, unsigned int pin)
++{
++	switch (when) {
++	case GPIO_INT_LEVEL_LOW:
++		CLEAR_REG_BIT(PNX833X_PIO_INT_EDGE, pin);
++		CLEAR_REG_BIT(PNX833X_PIO_INT_HI, pin);
++		SET_REG_BIT(PNX833X_PIO_INT_LO, pin);
++		break;
++	case GPIO_INT_LEVEL_HIGH:
++		CLEAR_REG_BIT(PNX833X_PIO_INT_EDGE, pin);
++		SET_REG_BIT(PNX833X_PIO_INT_HI, pin);
++		CLEAR_REG_BIT(PNX833X_PIO_INT_LO, pin);
++		break;
++	case GPIO_INT_EDGE_RISING:
++		SET_REG_BIT(PNX833X_PIO_INT_EDGE, pin);
++		SET_REG_BIT(PNX833X_PIO_INT_HI, pin);
++		CLEAR_REG_BIT(PNX833X_PIO_INT_LO, pin);
++		break;
++	case GPIO_INT_EDGE_FALLING:
++		SET_REG_BIT(PNX833X_PIO_INT_EDGE, pin);
++		CLEAR_REG_BIT(PNX833X_PIO_INT_HI, pin);
++		SET_REG_BIT(PNX833X_PIO_INT_LO, pin);
++		break;
++	case GPIO_INT_EDGE_BOTH:
++		SET_REG_BIT(PNX833X_PIO_INT_EDGE, pin);
++		SET_REG_BIT(PNX833X_PIO_INT_HI, pin);
++		SET_REG_BIT(PNX833X_PIO_INT_LO, pin);
++		break;
++	default:
++		CLEAR_REG_BIT(PNX833X_PIO_INT_EDGE, pin);
++		CLEAR_REG_BIT(PNX833X_PIO_INT_HI, pin);
++		CLEAR_REG_BIT(PNX833X_PIO_INT_LO, pin);
++		break;
++	}
++}
++
++/* Enable/disable GPIO interrupt */
++static inline void pnx833x_gpio_enable_irq(unsigned int pin)
++{
++	SET_REG_BIT(PNX833X_PIO_INT_ENABLE, pin);
++}
++static inline void pnx833x_gpio_disable_irq(unsigned int pin)
++{
++	CLEAR_REG_BIT(PNX833X_PIO_INT_ENABLE, pin);
++}
++
++/* Clear GPIO interrupt request */
++static inline void pnx833x_gpio_clear_irq(unsigned int pin)
++{
++	SET_REG_BIT(PNX833X_PIO_INT_CLEAR, pin);
++	CLEAR_REG_BIT(PNX833X_PIO_INT_CLEAR, pin);
++}
++
++#endif
+diff -Naur linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/irq.h linux-5.11/arch/mips/include/asm/mach-pnx833x/irq.h
+--- linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/irq.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/include/asm/mach-pnx833x/irq.h	2021-02-19 16:02:12.876699550 +0300
+@@ -0,0 +1,40 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ *  irq.h: IRQ mappings for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ */
++
++#ifndef __ASM_MIPS_MACH_PNX833X_IRQ_H
++#define __ASM_MIPS_MACH_PNX833X_IRQ_H
++/*
++ * The "IRQ numbers" are completely virtual.
++ *
++ * In PNX8330/1, we have 48 interrupt lines, numbered from 1 to 48.
++ * Let's use numbers 1..48 for PIC interrupts, number 0 for timer interrupt,
++ * numbers 49..64 for (virtual) GPIO interrupts.
++ *
++ * In PNX8335, we have 57 interrupt lines, numbered from 1 to 57,
++ * connected to PIC, which uses core hardware interrupt 2, and also
++ * a timer interrupt through hardware interrupt 5.
++ * Let's use numbers 1..64 for PIC interrupts, number 0 for timer interrupt,
++ * numbers 65..80 for (virtual) GPIO interrupts.
++ *
++ */
++#if defined(CONFIG_SOC_PNX8335)
++	#define PNX833X_PIC_NUM_IRQ			58
++#else
++	#define PNX833X_PIC_NUM_IRQ			37
++#endif
++
++#define MIPS_CPU_NUM_IRQ				8
++#define PNX833X_GPIO_NUM_IRQ			16
++
++#define MIPS_CPU_IRQ_BASE				0
++#define PNX833X_PIC_IRQ_BASE			(MIPS_CPU_IRQ_BASE + MIPS_CPU_NUM_IRQ)
++#define PNX833X_GPIO_IRQ_BASE			(PNX833X_PIC_IRQ_BASE + PNX833X_PIC_NUM_IRQ)
++#define NR_IRQS							(MIPS_CPU_NUM_IRQ + PNX833X_PIC_NUM_IRQ + PNX833X_GPIO_NUM_IRQ)
++
++#endif
+diff -Naur linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/irq-mapping.h linux-5.11/arch/mips/include/asm/mach-pnx833x/irq-mapping.h
+--- linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/irq-mapping.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/include/asm/mach-pnx833x/irq-mapping.h	2021-02-19 16:02:12.876699550 +0300
+@@ -0,0 +1,112 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++
++/*
++ *  irq.h: IRQ mappings for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ */
++
++#ifndef __ASM_MIPS_MACH_PNX833X_IRQ_MAPPING_H
++#define __ASM_MIPS_MACH_PNX833X_IRQ_MAPPING_H
++/*
++ * The "IRQ numbers" are completely virtual.
++ *
++ * In PNX8330/1, we have 48 interrupt lines, numbered from 1 to 48.
++ * Let's use numbers 1..48 for PIC interrupts, number 0 for timer interrupt,
++ * numbers 49..64 for (virtual) GPIO interrupts.
++ *
++ * In PNX8335, we have 57 interrupt lines, numbered from 1 to 57,
++ * connected to PIC, which uses core hardware interrupt 2, and also
++ * a timer interrupt through hardware interrupt 5.
++ * Let's use numbers 1..64 for PIC interrupts, number 0 for timer interrupt,
++ * numbers 65..80 for (virtual) GPIO interrupts.
++ *
++ */
++#include <irq.h>
++
++#define PNX833X_TIMER_IRQ				(MIPS_CPU_IRQ_BASE + 7)
++
++/* Interrupts supported by PIC */
++#define PNX833X_PIC_I2C0_INT			(PNX833X_PIC_IRQ_BASE +	 1)
++#define PNX833X_PIC_I2C1_INT			(PNX833X_PIC_IRQ_BASE +	 2)
++#define PNX833X_PIC_UART0_INT			(PNX833X_PIC_IRQ_BASE +	 3)
++#define PNX833X_PIC_UART1_INT			(PNX833X_PIC_IRQ_BASE +	 4)
++#define PNX833X_PIC_TS_IN0_DV_INT		(PNX833X_PIC_IRQ_BASE +	 5)
++#define PNX833X_PIC_TS_IN0_DMA_INT		(PNX833X_PIC_IRQ_BASE +	 6)
++#define PNX833X_PIC_GPIO_INT			(PNX833X_PIC_IRQ_BASE +	 7)
++#define PNX833X_PIC_AUDIO_DEC_INT		(PNX833X_PIC_IRQ_BASE +	 8)
++#define PNX833X_PIC_VIDEO_DEC_INT		(PNX833X_PIC_IRQ_BASE +	 9)
++#define PNX833X_PIC_CONFIG_INT			(PNX833X_PIC_IRQ_BASE + 10)
++#define PNX833X_PIC_AOI_INT				(PNX833X_PIC_IRQ_BASE + 11)
++#define PNX833X_PIC_SYNC_INT			(PNX833X_PIC_IRQ_BASE + 12)
++#define PNX8330_PIC_SPU_INT				(PNX833X_PIC_IRQ_BASE + 13)
++#define PNX8335_PIC_SATA_INT			(PNX833X_PIC_IRQ_BASE + 13)
++#define PNX833X_PIC_OSD_INT				(PNX833X_PIC_IRQ_BASE + 14)
++#define PNX833X_PIC_DISP1_INT			(PNX833X_PIC_IRQ_BASE + 15)
++#define PNX833X_PIC_DEINTERLACER_INT	(PNX833X_PIC_IRQ_BASE + 16)
++#define PNX833X_PIC_DISPLAY2_INT		(PNX833X_PIC_IRQ_BASE + 17)
++#define PNX833X_PIC_VC_INT				(PNX833X_PIC_IRQ_BASE + 18)
++#define PNX833X_PIC_SC_INT				(PNX833X_PIC_IRQ_BASE + 19)
++#define PNX833X_PIC_IDE_INT				(PNX833X_PIC_IRQ_BASE + 20)
++#define PNX833X_PIC_IDE_DMA_INT			(PNX833X_PIC_IRQ_BASE + 21)
++#define PNX833X_PIC_TS_IN1_DV_INT		(PNX833X_PIC_IRQ_BASE + 22)
++#define PNX833X_PIC_TS_IN1_DMA_INT		(PNX833X_PIC_IRQ_BASE + 23)
++#define PNX833X_PIC_SGDX_DMA_INT		(PNX833X_PIC_IRQ_BASE + 24)
++#define PNX833X_PIC_TS_OUT_INT			(PNX833X_PIC_IRQ_BASE + 25)
++#define PNX833X_PIC_IR_INT				(PNX833X_PIC_IRQ_BASE + 26)
++#define PNX833X_PIC_VMSP1_INT			(PNX833X_PIC_IRQ_BASE + 27)
++#define PNX833X_PIC_VMSP2_INT			(PNX833X_PIC_IRQ_BASE + 28)
++#define PNX833X_PIC_PIBC_INT			(PNX833X_PIC_IRQ_BASE + 29)
++#define PNX833X_PIC_TS_IN0_TRD_INT		(PNX833X_PIC_IRQ_BASE + 30)
++#define PNX833X_PIC_SGDX_TPD_INT		(PNX833X_PIC_IRQ_BASE + 31)
++#define PNX833X_PIC_USB_INT				(PNX833X_PIC_IRQ_BASE + 32)
++#define PNX833X_PIC_TS_IN1_TRD_INT		(PNX833X_PIC_IRQ_BASE + 33)
++#define PNX833X_PIC_CLOCK_INT			(PNX833X_PIC_IRQ_BASE + 34)
++#define PNX833X_PIC_SGDX_PARSER_INT		(PNX833X_PIC_IRQ_BASE + 35)
++#define PNX833X_PIC_VMSP_DMA_INT		(PNX833X_PIC_IRQ_BASE + 36)
++
++#if defined(CONFIG_SOC_PNX8335)
++#define PNX8335_PIC_MIU_INT					(PNX833X_PIC_IRQ_BASE + 37)
++#define PNX8335_PIC_AVCHIP_IRQ_INT			(PNX833X_PIC_IRQ_BASE + 38)
++#define PNX8335_PIC_SYNC_HD_INT				(PNX833X_PIC_IRQ_BASE + 39)
++#define PNX8335_PIC_DISP_HD_INT				(PNX833X_PIC_IRQ_BASE + 40)
++#define PNX8335_PIC_DISP_SCALER_INT			(PNX833X_PIC_IRQ_BASE + 41)
++#define PNX8335_PIC_OSD_HD1_INT				(PNX833X_PIC_IRQ_BASE + 42)
++#define PNX8335_PIC_DTL_WRITER_Y_INT		(PNX833X_PIC_IRQ_BASE + 43)
++#define PNX8335_PIC_DTL_WRITER_C_INT		(PNX833X_PIC_IRQ_BASE + 44)
++#define PNX8335_PIC_DTL_EMULATOR_Y_IR_INT	(PNX833X_PIC_IRQ_BASE + 45)
++#define PNX8335_PIC_DTL_EMULATOR_C_IR_INT	(PNX833X_PIC_IRQ_BASE + 46)
++#define PNX8335_PIC_DENC_TTX_INT			(PNX833X_PIC_IRQ_BASE + 47)
++#define PNX8335_PIC_MMI_SIF0_INT			(PNX833X_PIC_IRQ_BASE + 48)
++#define PNX8335_PIC_MMI_SIF1_INT			(PNX833X_PIC_IRQ_BASE + 49)
++#define PNX8335_PIC_MMI_CDMMU_INT			(PNX833X_PIC_IRQ_BASE + 50)
++#define PNX8335_PIC_PIBCS_INT				(PNX833X_PIC_IRQ_BASE + 51)
++#define PNX8335_PIC_ETHERNET_INT			(PNX833X_PIC_IRQ_BASE + 52)
++#define PNX8335_PIC_VMSP1_0_INT				(PNX833X_PIC_IRQ_BASE + 53)
++#define PNX8335_PIC_VMSP1_1_INT				(PNX833X_PIC_IRQ_BASE + 54)
++#define PNX8335_PIC_VMSP1_DMA_INT			(PNX833X_PIC_IRQ_BASE + 55)
++#define PNX8335_PIC_TDGR_DE_INT				(PNX833X_PIC_IRQ_BASE + 56)
++#define PNX8335_PIC_IR1_IRQ_INT				(PNX833X_PIC_IRQ_BASE + 57)
++#endif
++
++/* GPIO interrupts */
++#define PNX833X_GPIO_0_INT			(PNX833X_GPIO_IRQ_BASE +  0)
++#define PNX833X_GPIO_1_INT			(PNX833X_GPIO_IRQ_BASE +  1)
++#define PNX833X_GPIO_2_INT			(PNX833X_GPIO_IRQ_BASE +  2)
++#define PNX833X_GPIO_3_INT			(PNX833X_GPIO_IRQ_BASE +  3)
++#define PNX833X_GPIO_4_INT			(PNX833X_GPIO_IRQ_BASE +  4)
++#define PNX833X_GPIO_5_INT			(PNX833X_GPIO_IRQ_BASE +  5)
++#define PNX833X_GPIO_6_INT			(PNX833X_GPIO_IRQ_BASE +  6)
++#define PNX833X_GPIO_7_INT			(PNX833X_GPIO_IRQ_BASE +  7)
++#define PNX833X_GPIO_8_INT			(PNX833X_GPIO_IRQ_BASE +  8)
++#define PNX833X_GPIO_9_INT			(PNX833X_GPIO_IRQ_BASE +  9)
++#define PNX833X_GPIO_10_INT			(PNX833X_GPIO_IRQ_BASE + 10)
++#define PNX833X_GPIO_11_INT			(PNX833X_GPIO_IRQ_BASE + 11)
++#define PNX833X_GPIO_12_INT			(PNX833X_GPIO_IRQ_BASE + 12)
++#define PNX833X_GPIO_13_INT			(PNX833X_GPIO_IRQ_BASE + 13)
++#define PNX833X_GPIO_14_INT			(PNX833X_GPIO_IRQ_BASE + 14)
++#define PNX833X_GPIO_15_INT			(PNX833X_GPIO_IRQ_BASE + 15)
++
++#endif
+diff -Naur linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h linux-5.11/arch/mips/include/asm/mach-pnx833x/pnx833x.h
+--- linux-5.11.orig/arch/mips/include/asm/mach-pnx833x/pnx833x.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/include/asm/mach-pnx833x/pnx833x.h	2021-02-19 16:02:12.876699550 +0300
+@@ -0,0 +1,194 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ *  pnx833x.h: Register mappings for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ */
++#ifndef __ASM_MIPS_MACH_PNX833X_PNX833X_H
++#define __ASM_MIPS_MACH_PNX833X_PNX833X_H
++
++/* All regs are accessed in KSEG1 */
++#define PNX833X_BASE		(0xa0000000ul + 0x17E00000ul)
++
++#define PNX833X_REG(offs)	(*((volatile unsigned long *)(PNX833X_BASE + offs)))
++
++/* Registers are named exactly as in PNX833X docs, just with PNX833X_ prefix */
++
++/* Read access to multibit fields */
++#define PNX833X_BIT(val, reg, field)	((val) & PNX833X_##reg##_##field)
++#define PNX833X_REGBIT(reg, field)	PNX833X_BIT(PNX833X_##reg, reg, field)
++
++/* Use PNX833X_FIELD to extract a field from val */
++#define PNX_FIELD(cpu, val, reg, field) \
++		(((val) & PNX##cpu##_##reg##_##field##_MASK) >> \
++			PNX##cpu##_##reg##_##field##_SHIFT)
++#define PNX833X_FIELD(val, reg, field)	PNX_FIELD(833X, val, reg, field)
++#define PNX8330_FIELD(val, reg, field)	PNX_FIELD(8330, val, reg, field)
++#define PNX8335_FIELD(val, reg, field)	PNX_FIELD(8335, val, reg, field)
++
++/* Use PNX833X_REGFIELD to extract a field from a register */
++#define PNX833X_REGFIELD(reg, field)	PNX833X_FIELD(PNX833X_##reg, reg, field)
++#define PNX8330_REGFIELD(reg, field)	PNX8330_FIELD(PNX8330_##reg, reg, field)
++#define PNX8335_REGFIELD(reg, field)	PNX8335_FIELD(PNX8335_##reg, reg, field)
++
++
++#define PNX_WRITEFIELD(cpu, val, reg, field) \
++	(PNX##cpu##_##reg = (PNX##cpu##_##reg & ~(PNX##cpu##_##reg##_##field##_MASK)) | \
++						((val) << PNX##cpu##_##reg##_##field##_SHIFT))
++#define PNX833X_WRITEFIELD(val, reg, field) \
++					PNX_WRITEFIELD(833X, val, reg, field)
++#define PNX8330_WRITEFIELD(val, reg, field) \
++					PNX_WRITEFIELD(8330, val, reg, field)
++#define PNX8335_WRITEFIELD(val, reg, field) \
++					PNX_WRITEFIELD(8335, val, reg, field)
++
++
++/* Macros to detect CPU type */
++
++#define PNX833X_CONFIG_MODULE_ID		PNX833X_REG(0x7FFC)
++#define PNX833X_CONFIG_MODULE_ID_MAJREV_MASK	0x0000f000
++#define PNX833X_CONFIG_MODULE_ID_MAJREV_SHIFT	12
++#define PNX8330_CONFIG_MODULE_MAJREV		4
++#define PNX8335_CONFIG_MODULE_MAJREV		5
++#define CPU_IS_PNX8330	(PNX833X_REGFIELD(CONFIG_MODULE_ID, MAJREV) == \
++					PNX8330_CONFIG_MODULE_MAJREV)
++#define CPU_IS_PNX8335	(PNX833X_REGFIELD(CONFIG_MODULE_ID, MAJREV) == \
++					PNX8335_CONFIG_MODULE_MAJREV)
++
++
++
++#define PNX833X_RESET_CONTROL		PNX833X_REG(0x8004)
++#define PNX833X_RESET_CONTROL_2		PNX833X_REG(0x8014)
++
++#define PNX833X_PIC_REG(offs)		PNX833X_REG(0x01000 + (offs))
++#define PNX833X_PIC_INT_PRIORITY	PNX833X_PIC_REG(0x0)
++#define PNX833X_PIC_INT_SRC		PNX833X_PIC_REG(0x4)
++#define PNX833X_PIC_INT_SRC_INT_SRC_MASK	0x00000FF8ul	/* bits 11:3 */
++#define PNX833X_PIC_INT_SRC_INT_SRC_SHIFT	3
++#define PNX833X_PIC_INT_REG(irq)	PNX833X_PIC_REG(0x10 + 4*(irq))
++
++#define PNX833X_CLOCK_CPUCP_CTL PNX833X_REG(0x9228)
++#define PNX833X_CLOCK_CPUCP_CTL_EXIT_RESET	0x00000002ul	/* bit 1 */
++#define PNX833X_CLOCK_CPUCP_CTL_DIV_CLOCK_MASK	0x00000018ul	/* bits 4:3 */
++#define PNX833X_CLOCK_CPUCP_CTL_DIV_CLOCK_SHIFT 3
++
++#define PNX8335_CLOCK_PLL_CPU_CTL		PNX833X_REG(0x9020)
++#define PNX8335_CLOCK_PLL_CPU_CTL_FREQ_MASK	0x1f
++#define PNX8335_CLOCK_PLL_CPU_CTL_FREQ_SHIFT	0
++
++#define PNX833X_CONFIG_MUX		PNX833X_REG(0x7004)
++#define PNX833X_CONFIG_MUX_IDE_MUX	0x00000080		/* bit 7 */
++
++#define PNX8330_CONFIG_POLYFUSE_7	PNX833X_REG(0x7040)
++#define PNX8330_CONFIG_POLYFUSE_7_BOOT_MODE_MASK	0x00180000
++#define PNX8330_CONFIG_POLYFUSE_7_BOOT_MODE_SHIFT	19
++
++#define PNX833X_PIO_IN		PNX833X_REG(0xF000)
++#define PNX833X_PIO_OUT		PNX833X_REG(0xF004)
++#define PNX833X_PIO_DIR		PNX833X_REG(0xF008)
++#define PNX833X_PIO_SEL		PNX833X_REG(0xF014)
++#define PNX833X_PIO_INT_EDGE	PNX833X_REG(0xF020)
++#define PNX833X_PIO_INT_HI	PNX833X_REG(0xF024)
++#define PNX833X_PIO_INT_LO	PNX833X_REG(0xF028)
++#define PNX833X_PIO_INT_STATUS	PNX833X_REG(0xFFE0)
++#define PNX833X_PIO_INT_ENABLE	PNX833X_REG(0xFFE4)
++#define PNX833X_PIO_INT_CLEAR	PNX833X_REG(0xFFE8)
++#define PNX833X_PIO_IN2		PNX833X_REG(0xF05C)
++#define PNX833X_PIO_OUT2	PNX833X_REG(0xF060)
++#define PNX833X_PIO_DIR2	PNX833X_REG(0xF064)
++#define PNX833X_PIO_SEL2	PNX833X_REG(0xF068)
++
++#define PNX833X_UART0_PORTS_START	(PNX833X_BASE + 0xB000)
++#define PNX833X_UART0_PORTS_END		(PNX833X_BASE + 0xBFFF)
++#define PNX833X_UART1_PORTS_START	(PNX833X_BASE + 0xC000)
++#define PNX833X_UART1_PORTS_END		(PNX833X_BASE + 0xCFFF)
++
++#define PNX833X_USB_PORTS_START		(PNX833X_BASE + 0x19000)
++#define PNX833X_USB_PORTS_END		(PNX833X_BASE + 0x19FFF)
++
++#define PNX833X_CONFIG_USB		PNX833X_REG(0x7008)
++#define PNX833X_USB_PORTSC1		PNX833X_REG(0x19184)
++
++#define PNX833X_I2C0_PORTS_START	(PNX833X_BASE + 0xD000)
++#define PNX833X_I2C0_PORTS_END		(PNX833X_BASE + 0xDFFF)
++#define PNX833X_I2C1_PORTS_START	(PNX833X_BASE + 0xE000)
++#define PNX833X_I2C1_PORTS_END		(PNX833X_BASE + 0xEFFF)
++
++#define PNX833X_IDE_PORTS_START		(PNX833X_BASE + 0x1A000)
++#define PNX833X_IDE_PORTS_END		(PNX833X_BASE + 0x1AFFF)
++#define PNX833X_IDE_MODULE_ID		PNX833X_REG(0x1AFFC)
++
++#define PNX833X_IDE_MODULE_ID_MODULE_ID_MASK	0xFFFF0000
++#define PNX833X_IDE_MODULE_ID_MODULE_ID_SHIFT	16
++#define PNX833X_IDE_MODULE_ID_VALUE		0xA009
++
++
++#define PNX833X_MIU_SEL0			PNX833X_REG(0x2004)
++#define PNX833X_MIU_SEL0_TIMING		PNX833X_REG(0x2008)
++#define PNX833X_MIU_SEL1			PNX833X_REG(0x200C)
++#define PNX833X_MIU_SEL1_TIMING		PNX833X_REG(0x2010)
++#define PNX833X_MIU_SEL2			PNX833X_REG(0x2014)
++#define PNX833X_MIU_SEL2_TIMING		PNX833X_REG(0x2018)
++#define PNX833X_MIU_SEL3			PNX833X_REG(0x201C)
++#define PNX833X_MIU_SEL3_TIMING		PNX833X_REG(0x2020)
++
++#define PNX833X_MIU_SEL0_SPI_MODE_ENABLE_MASK	(1 << 14)
++#define PNX833X_MIU_SEL0_SPI_MODE_ENABLE_SHIFT	14
++
++#define PNX833X_MIU_SEL0_BURST_MODE_ENABLE_MASK (1 << 7)
++#define PNX833X_MIU_SEL0_BURST_MODE_ENABLE_SHIFT	7
++
++#define PNX833X_MIU_SEL0_BURST_PAGE_LEN_MASK	(0xF << 9)
++#define PNX833X_MIU_SEL0_BURST_PAGE_LEN_SHIFT	9
++
++#define PNX833X_MIU_CONFIG_SPI		PNX833X_REG(0x2000)
++
++#define PNX833X_MIU_CONFIG_SPI_OPCODE_MASK	(0xFF << 3)
++#define PNX833X_MIU_CONFIG_SPI_OPCODE_SHIFT	3
++
++#define PNX833X_MIU_CONFIG_SPI_DATA_ENABLE_MASK (1 << 2)
++#define PNX833X_MIU_CONFIG_SPI_DATA_ENABLE_SHIFT	2
++
++#define PNX833X_MIU_CONFIG_SPI_ADDR_ENABLE_MASK (1 << 1)
++#define PNX833X_MIU_CONFIG_SPI_ADDR_ENABLE_SHIFT	1
++
++#define PNX833X_MIU_CONFIG_SPI_SYNC_MASK	(1 << 0)
++#define PNX833X_MIU_CONFIG_SPI_SYNC_SHIFT	0
++
++#define PNX833X_WRITE_CONFIG_SPI(opcode, data_enable, addr_enable, sync) \
++   (PNX833X_MIU_CONFIG_SPI =						\
++    ((opcode) << PNX833X_MIU_CONFIG_SPI_OPCODE_SHIFT) |			\
++    ((data_enable) << PNX833X_MIU_CONFIG_SPI_DATA_ENABLE_SHIFT) |	\
++    ((addr_enable) << PNX833X_MIU_CONFIG_SPI_ADDR_ENABLE_SHIFT) |	\
++    ((sync) << PNX833X_MIU_CONFIG_SPI_SYNC_SHIFT))
++
++#define PNX8335_IP3902_PORTS_START		(PNX833X_BASE + 0x2F000)
++#define PNX8335_IP3902_PORTS_END		(PNX833X_BASE + 0x2FFFF)
++#define PNX8335_IP3902_MODULE_ID		PNX833X_REG(0x2FFFC)
++
++#define PNX8335_IP3902_MODULE_ID_MODULE_ID_MASK		0xFFFF0000
++#define PNX8335_IP3902_MODULE_ID_MODULE_ID_SHIFT	16
++#define PNX8335_IP3902_MODULE_ID_VALUE			0x3902
++
++ /* I/O location(gets remapped)*/
++#define PNX8335_NAND_BASE	    0x18000000
++/* I/O location with CLE high */
++#define PNX8335_NAND_CLE_MASK	0x00100000
++/* I/O location with ALE high */
++#define PNX8335_NAND_ALE_MASK	0x00010000
++
++#define PNX8335_SATA_PORTS_START	(PNX833X_BASE + 0x2E000)
++#define PNX8335_SATA_PORTS_END		(PNX833X_BASE + 0x2EFFF)
++#define PNX8335_SATA_MODULE_ID		PNX833X_REG(0x2EFFC)
++
++#define PNX8335_SATA_MODULE_ID_MODULE_ID_MASK	0xFFFF0000
++#define PNX8335_SATA_MODULE_ID_MODULE_ID_SHIFT	16
++#define PNX8335_SATA_MODULE_ID_VALUE		0xA099
++
++#define PNX8335_SIF_CPU_OPTIMIZATION			PNX833X_REG(0x3038)
++#define PNX8335_SIF_CPU_OPTIMIZATION_CPU_FREE_MASK	0x1
++#define PNX8335_SIF_CPU_OPTIMIZATION_CPU_FREE_SHIFT	0
++
++#endif
+diff -Naur linux-5.11.orig/arch/mips/Kbuild.platforms linux-5.11/arch/mips/Kbuild.platforms
+--- linux-5.11.orig/arch/mips/Kbuild.platforms	2021-02-15 01:32:24.000000000 +0300
++++ linux-5.11/arch/mips/Kbuild.platforms	2021-02-19 16:02:12.876699550 +0300
+@@ -21,6 +21,7 @@
+ platform-$(CONFIG_NLM_COMMON)		+= netlogic/
+ platform-$(CONFIG_PIC32MZDA)		+= pic32/
+ platform-$(CONFIG_MACH_PISTACHIO)	+= pistachio/
++platform-$(CONFIG_SOC_PNX833X)		+= pnx833x/
+ platform-$(CONFIG_RALINK)		+= ralink/
+ platform-$(CONFIG_MIKROTIK_RB532)	+= rb532/
+ platform-$(CONFIG_SGI_IP22)		+= sgi-ip22/
+diff -Naur linux-5.11.orig/arch/mips/Kconfig linux-5.11/arch/mips/Kconfig
+--- linux-5.11.orig/arch/mips/Kconfig	2021-02-15 01:32:24.000000000 +0300
++++ linux-5.11/arch/mips/Kconfig	2021-02-19 16:02:12.876699550 +0300
+@@ -608,6 +608,20 @@
+ 	select SYS_SUPPORTS_MIPS16
+ 	select GPIOLIB
+ 
++config NXP_STB220
++	bool "NXP STB220 board"
++	select SOC_PNX833X
++	help
++	  Support for NXP Semiconductors STB220 Development Board.
++
++config NXP_STB225
++	bool "NXP 225 board"
++	select SOC_PNX833X
++	select SOC_PNX8335
++	select SYS_HAS_EARLY_PRINTK
++	help
++	  Support for NXP Semiconductors STB225 Development Board.
++
+ config RALINK
+ 	bool "Ralink based machines"
+ 	select CEVT_R4K
+@@ -1282,6 +1296,25 @@
+ config NO_EXCEPT_FILL
+ 	bool
+ 
++config SOC_PNX833X
++	bool
++	select CEVT_R4K
++	select CSRC_R4K
++	select IRQ_MIPS_CPU
++	select DMA_NONCOHERENT
++	select SYS_HAS_CPU_MIPS32_R2
++	select SYS_SUPPORTS_32BIT_KERNEL
++	select SYS_SUPPORTS_LITTLE_ENDIAN
++	select SYS_SUPPORTS_BIG_ENDIAN
++	select SYS_SUPPORTS_MIPS16
++	select CPU_MIPSR2_IRQ_VI
++
++config SOC_PNX8335
++	bool
++	select SOC_PNX833X
++	select MIPS_L1_CACHE_SHIFT_4
++	select USB_ARCH_HAS_HCD
++
+ config MIPS_SPRAM
+ 	bool
+ 
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/gdb_hook.c linux-5.11/arch/mips/pnx833x/common/gdb_hook.c
+--- linux-5.11.orig/arch/mips/pnx833x/common/gdb_hook.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/gdb_hook.c	2021-02-19 16:02:12.876699550 +0300
+@@ -0,0 +1,145 @@
++/*  Copyright (C) 2007 NXP B.V.
++    All Rights Reserved.
++    @file   gdb_hook.c
++    @brief  Uart connectivity
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++GNU General Public License for more details.
++
++You should have received a copy of the GNU General Public License
++along with this program; if not, write to the Free Software
++Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
++Or, point your browser to http://www.gnu.org/copyleft/gpl.html
++
++*/
++
++/***********************************************
++* INCLUDE FILES                                *
++************************************************/
++
++#include <asm/mach-pnx833x/pnx833x.h>
++#include <linux/serial_pnx8xxx.h>
++
++/***********************************************
++* LOCAL MACROS                                 *
++************************************************/
++
++#define UART0 (unsigned char *)PNX833X_UART0_PORTS_START
++#define UART1 (unsigned char *)PNX833X_UART1_PORTS_START
++
++/***********************************************
++* LOCAL TYPEDEFS                               *
++************************************************/
++
++/***********************************************
++* STATIC FUNCTION PROTOTYPES                   *
++************************************************/
++
++/***********************************************
++* STATIC DATA                                  *
++************************************************/
++/** Make sure that we setup console to correct uart 
++    as prom_puChar is used early on before proper kernel init.*/
++static unsigned char * consoleUart = UART0;
++static volatile int delay_count;
++
++/***********************************************
++* EXPORTED DATA                                *
++************************************************/
++
++/***********************************************
++* FUNCTION IMPLEMENTATION                      *
++************************************************/
++
++static unsigned int serial_in(unsigned char * baseAddress, int offset)
++{
++    return *((unsigned int volatile *)(baseAddress + offset));
++}
++
++static void serial_out(unsigned char * baseAddress, int offset,int value)
++{
++    *((unsigned int volatile *)(baseAddress + offset)) = value;
++}
++
++static void do_delay(void)
++{
++    int i;
++    for(i=0; i<10000; i++)
++    {
++        delay_count++;
++    }
++}
++
++static int putChar(unsigned char * baseAddress, char c)
++{
++    /* Wait for TX to be ready */
++    while(((serial_in(baseAddress, PNX8XXX_FIFO) & PNX8XXX_UART_FIFO_TXFIFO) >> 16) > 15)
++    {
++        do_delay();
++    }
++
++    /* Send the next character */
++    serial_out(baseAddress, PNX8XXX_FIFO, c);
++    serial_out(baseAddress, PNX8XXX_ICLR, PNX8XXX_UART_INT_TX);
++
++    return 1;
++}
++
++static char getChar(unsigned char * baseAddress)
++{
++    char output;
++
++    /* Wait for RX to be ready */
++    while ((serial_in(baseAddress, PNX8XXX_FIFO) & PNX8XXX_UART_FIFO_RXFIFO) == 0)
++    {
++        do_delay();
++    }
++
++    /* Get the character */
++    output = serial_in(baseAddress, PNX8XXX_FIFO) & 0xFF;
++
++    /* Move onto the next character in the buffer */
++    serial_out(baseAddress, PNX8XXX_LCR, serial_in(baseAddress, PNX8XXX_LCR) | PNX8XXX_UART_LCR_RX_NEXT);
++    serial_out(baseAddress, PNX8XXX_ICLR, PNX8XXX_UART_INT_RX);
++
++    return output;
++}
++
++static void serialInit(unsigned char * baseAddress)
++{
++    serial_out(baseAddress, PNX8XXX_LCR, PNX8XXX_UART_LCR_8BIT | PNX8XXX_UART_LCR_TX_RST | PNX8XXX_UART_LCR_RX_RST);
++    serial_out(baseAddress, PNX8XXX_MCR, PNX8XXX_UART_MCR_DTR | PNX8XXX_UART_MCR_RTS);
++    serial_out(baseAddress, PNX8XXX_BAUD, 1); // 115200 Baud
++    serial_out(baseAddress, PNX8XXX_CFG, 0x00060030);
++    serial_out(baseAddress, PNX8XXX_ICLR, -1);
++    serial_out(baseAddress, PNX8XXX_IEN, 0);
++}
++
++static void setupSerialOutput(void)
++{
++    static bool initialised = false;
++    if (!initialised) 
++    {
++        serialInit(consoleUart);
++        initialised = true;
++    }
++}
++
++int prom_putchar(char c)
++{
++    setupSerialOutput();
++    return putChar(consoleUart, c);
++}
++
++char prom_getchar(void)
++{
++    setupSerialOutput();
++    return getChar(consoleUart);
++}
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/interrupts.c linux-5.11/arch/mips/pnx833x/common/interrupts.c
+--- linux-5.11.orig/arch/mips/pnx833x/common/interrupts.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/interrupts.c	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,303 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  interrupts.c: Interrupt mappings for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ */
++#include <linux/kernel.h>
++#include <linux/irq.h>
++#include <linux/hardirq.h>
++#include <linux/interrupt.h>
++#include <asm/mipsregs.h>
++#include <asm/irq_cpu.h>
++#include <asm/setup.h>
++#include <irq.h>
++#include <irq-mapping.h>
++#include <gpio.h>
++
++static int mips_cpu_timer_irq;
++
++static const unsigned int irq_prio[PNX833X_PIC_NUM_IRQ] =
++{
++    0, /* unused */
++    4, /* PNX833X_PIC_I2C0_INT		       1 */
++    4, /* PNX833X_PIC_I2C1_INT		       2 */
++    1, /* PNX833X_PIC_UART0_INT		       3 */
++    1, /* PNX833X_PIC_UART1_INT		       4 */
++    6, /* PNX833X_PIC_TS_IN0_DV_INT	       5 */
++    6, /* PNX833X_PIC_TS_IN0_DMA_INT	       6 */
++    7, /* PNX833X_PIC_GPIO_INT		       7 */
++    4, /* PNX833X_PIC_AUDIO_DEC_INT	       8 */
++    5, /* PNX833X_PIC_VIDEO_DEC_INT	       9 */
++    4, /* PNX833X_PIC_CONFIG_INT	      10 */
++    4, /* PNX833X_PIC_AOI_INT		      11 */
++    9, /* PNX833X_PIC_SYNC_INT		      12 */
++    9, /* PNX8335_PIC_SATA_INT		      13 */
++    4, /* PNX833X_PIC_OSD_INT		      14 */
++    9, /* PNX833X_PIC_DISP1_INT		      15 */
++    4, /* PNX833X_PIC_DEINTERLACER_INT	      16 */
++    9, /* PNX833X_PIC_DISPLAY2_INT	      17 */
++    4, /* PNX833X_PIC_VC_INT		      18 */
++    4, /* PNX833X_PIC_SC_INT		      19 */
++    9, /* PNX833X_PIC_IDE_INT		      20 */
++    9, /* PNX833X_PIC_IDE_DMA_INT	      21 */
++    6, /* PNX833X_PIC_TS_IN1_DV_INT	      22 */
++    6, /* PNX833X_PIC_TS_IN1_DMA_INT	      23 */
++    4, /* PNX833X_PIC_SGDX_DMA_INT	      24 */
++    4, /* PNX833X_PIC_TS_OUT_INT	      25 */
++    4, /* PNX833X_PIC_IR_INT		      26 */
++    3, /* PNX833X_PIC_VMSP1_INT		      27 */
++    3, /* PNX833X_PIC_VMSP2_INT		      28 */
++    4, /* PNX833X_PIC_PIBC_INT		      29 */
++    4, /* PNX833X_PIC_TS_IN0_TRD_INT	      30 */
++    4, /* PNX833X_PIC_SGDX_TPD_INT	      31 */
++    5, /* PNX833X_PIC_USB_INT		      32 */
++    4, /* PNX833X_PIC_TS_IN1_TRD_INT	      33 */
++    4, /* PNX833X_PIC_CLOCK_INT		      34 */
++    4, /* PNX833X_PIC_SGDX_PARSER_INT	      35 */
++    4, /* PNX833X_PIC_VMSP_DMA_INT	      36 */
++#if defined(CONFIG_SOC_PNX8335)
++    4, /* PNX8335_PIC_MIU_INT		      37 */
++    4, /* PNX8335_PIC_AVCHIP_IRQ_INT	      38 */
++    9, /* PNX8335_PIC_SYNC_HD_INT	      39 */
++    9, /* PNX8335_PIC_DISP_HD_INT	      40 */
++    9, /* PNX8335_PIC_DISP_SCALER_INT	      41 */
++    4, /* PNX8335_PIC_OSD_HD1_INT	      42 */
++    4, /* PNX8335_PIC_DTL_WRITER_Y_INT	      43 */
++    4, /* PNX8335_PIC_DTL_WRITER_C_INT	      44 */
++    4, /* PNX8335_PIC_DTL_EMULATOR_Y_IR_INT   45 */
++    4, /* PNX8335_PIC_DTL_EMULATOR_C_IR_INT   46 */
++    4, /* PNX8335_PIC_DENC_TTX_INT	      47 */
++    4, /* PNX8335_PIC_MMI_SIF0_INT	      48 */
++    4, /* PNX8335_PIC_MMI_SIF1_INT	      49 */
++    4, /* PNX8335_PIC_MMI_CDMMU_INT	      50 */
++    4, /* PNX8335_PIC_PIBCS_INT		      51 */
++   12, /* PNX8335_PIC_ETHERNET_INT	      52 */
++    3, /* PNX8335_PIC_VMSP1_0_INT	      53 */
++    3, /* PNX8335_PIC_VMSP1_1_INT	      54 */
++    4, /* PNX8335_PIC_VMSP1_DMA_INT	      55 */
++    4, /* PNX8335_PIC_TDGR_DE_INT	      56 */
++    4, /* PNX8335_PIC_IR1_IRQ_INT	      57 */
++#endif
++};
++
++static void pnx833x_timer_dispatch(void)
++{
++	do_IRQ(mips_cpu_timer_irq);
++}
++
++static void pic_dispatch(void)
++{
++	unsigned int irq = PNX833X_REGFIELD(PIC_INT_SRC, INT_SRC);
++
++	if ((irq >= 1) && (irq < (PNX833X_PIC_NUM_IRQ))) {
++		unsigned long priority = PNX833X_PIC_INT_PRIORITY;
++		PNX833X_PIC_INT_PRIORITY = irq_prio[irq];
++
++		if (irq == PNX833X_PIC_GPIO_INT) {
++			unsigned long mask = PNX833X_PIO_INT_STATUS & PNX833X_PIO_INT_ENABLE;
++			int pin;
++			while ((pin = ffs(mask & 0xffff))) {
++				pin -= 1;
++				do_IRQ(PNX833X_GPIO_IRQ_BASE + pin);
++				mask &= ~(1 << pin);
++			}
++		} else {
++			do_IRQ(irq + PNX833X_PIC_IRQ_BASE);
++		}
++
++		PNX833X_PIC_INT_PRIORITY = priority;
++	} else {
++		printk(KERN_ERR "plat_irq_dispatch: unexpected irq %u\n", irq);
++	}
++}
++
++asmlinkage void plat_irq_dispatch(void)
++{
++	unsigned int pending = read_c0_status() & read_c0_cause();
++
++	if (pending & STATUSF_IP4)
++		pic_dispatch();
++	else if (pending & STATUSF_IP7)
++		do_IRQ(PNX833X_TIMER_IRQ);
++	else
++		spurious_interrupt();
++}
++
++static inline void pnx833x_hard_enable_pic_irq(unsigned int irq)
++{
++	/* Currently we do this by setting IRQ priority to 1.
++	   If priority support is being implemented, 1 should be repalced
++		by a better value. */
++	PNX833X_PIC_INT_REG(irq) = irq_prio[irq];
++}
++
++static inline void pnx833x_hard_disable_pic_irq(unsigned int irq)
++{
++	/* Disable IRQ by writing setting it's priority to 0 */
++	PNX833X_PIC_INT_REG(irq) = 0;
++}
++
++static DEFINE_RAW_SPINLOCK(pnx833x_irq_lock);
++
++static unsigned int pnx833x_startup_pic_irq(unsigned int irq)
++{
++	unsigned long flags;
++	unsigned int pic_irq = irq - PNX833X_PIC_IRQ_BASE;
++
++	raw_spin_lock_irqsave(&pnx833x_irq_lock, flags);
++	pnx833x_hard_enable_pic_irq(pic_irq);
++	raw_spin_unlock_irqrestore(&pnx833x_irq_lock, flags);
++	return 0;
++}
++
++static void pnx833x_enable_pic_irq(struct irq_data *d)
++{
++	unsigned long flags;
++	unsigned int pic_irq = d->irq - PNX833X_PIC_IRQ_BASE;
++
++	raw_spin_lock_irqsave(&pnx833x_irq_lock, flags);
++	pnx833x_hard_enable_pic_irq(pic_irq);
++	raw_spin_unlock_irqrestore(&pnx833x_irq_lock, flags);
++}
++
++static void pnx833x_disable_pic_irq(struct irq_data *d)
++{
++	unsigned long flags;
++	unsigned int pic_irq = d->irq - PNX833X_PIC_IRQ_BASE;
++
++	raw_spin_lock_irqsave(&pnx833x_irq_lock, flags);
++	pnx833x_hard_disable_pic_irq(pic_irq);
++	raw_spin_unlock_irqrestore(&pnx833x_irq_lock, flags);
++}
++
++static DEFINE_RAW_SPINLOCK(pnx833x_gpio_pnx833x_irq_lock);
++
++static void pnx833x_enable_gpio_irq(struct irq_data *d)
++{
++	int pin = d->irq - PNX833X_GPIO_IRQ_BASE;
++	unsigned long flags;
++	raw_spin_lock_irqsave(&pnx833x_gpio_pnx833x_irq_lock, flags);
++	pnx833x_gpio_enable_irq(pin);
++	raw_spin_unlock_irqrestore(&pnx833x_gpio_pnx833x_irq_lock, flags);
++}
++
++static void pnx833x_disable_gpio_irq(struct irq_data *d)
++{
++	int pin = d->irq - PNX833X_GPIO_IRQ_BASE;
++	unsigned long flags;
++	raw_spin_lock_irqsave(&pnx833x_gpio_pnx833x_irq_lock, flags);
++	pnx833x_gpio_disable_irq(pin);
++	raw_spin_unlock_irqrestore(&pnx833x_gpio_pnx833x_irq_lock, flags);
++}
++
++static int pnx833x_set_type_gpio_irq(struct irq_data *d, unsigned int flow_type)
++{
++	int pin = d->irq - PNX833X_GPIO_IRQ_BASE;
++	int gpio_mode;
++
++	switch (flow_type) {
++	case IRQ_TYPE_EDGE_RISING:
++		gpio_mode = GPIO_INT_EDGE_RISING;
++		break;
++	case IRQ_TYPE_EDGE_FALLING:
++		gpio_mode = GPIO_INT_EDGE_FALLING;
++		break;
++	case IRQ_TYPE_EDGE_BOTH:
++		gpio_mode = GPIO_INT_EDGE_BOTH;
++		break;
++	case IRQ_TYPE_LEVEL_HIGH:
++		gpio_mode = GPIO_INT_LEVEL_HIGH;
++		break;
++	case IRQ_TYPE_LEVEL_LOW:
++		gpio_mode = GPIO_INT_LEVEL_LOW;
++		break;
++	default:
++		gpio_mode = GPIO_INT_NONE;
++		break;
++	}
++
++	pnx833x_gpio_setup_irq(gpio_mode, pin);
++
++	return 0;
++}
++
++static struct irq_chip pnx833x_pic_irq_type = {
++	.name = "PNX-PIC",
++	.irq_enable = pnx833x_enable_pic_irq,
++	.irq_disable = pnx833x_disable_pic_irq,
++};
++
++static struct irq_chip pnx833x_gpio_irq_type = {
++	.name = "PNX-GPIO",
++	.irq_enable = pnx833x_enable_gpio_irq,
++	.irq_disable = pnx833x_disable_gpio_irq,
++	.irq_set_type = pnx833x_set_type_gpio_irq,
++};
++
++void __init arch_init_irq(void)
++{
++	unsigned int irq;
++
++	/* setup standard internal cpu irqs */
++	mips_cpu_irq_init();
++
++	/* Set IRQ information in irq_desc */
++	for (irq = PNX833X_PIC_IRQ_BASE; irq < (PNX833X_PIC_IRQ_BASE + PNX833X_PIC_NUM_IRQ); irq++) {
++		pnx833x_hard_disable_pic_irq(irq);
++		irq_set_chip_and_handler(irq, &pnx833x_pic_irq_type,
++					 handle_simple_irq);
++	}
++
++	for (irq = PNX833X_GPIO_IRQ_BASE; irq < (PNX833X_GPIO_IRQ_BASE + PNX833X_GPIO_NUM_IRQ); irq++)
++		irq_set_chip_and_handler(irq, &pnx833x_gpio_irq_type,
++					 handle_simple_irq);
++
++	/* Set PIC priority limiter register to 0 */
++	PNX833X_PIC_INT_PRIORITY = 0;
++
++	/* Setup GPIO IRQ dispatching */
++	pnx833x_startup_pic_irq(PNX833X_PIC_GPIO_INT);
++
++	/* Enable PIC IRQs (HWIRQ2) */
++	if (cpu_has_vint)
++		set_vi_handler(4, pic_dispatch);
++
++	write_c0_status(read_c0_status() | IE_IRQ2);
++}
++
++unsigned int get_c0_compare_int(void)
++{
++	if (cpu_has_vint)
++		set_vi_handler(cp0_compare_irq, pnx833x_timer_dispatch);
++
++	mips_cpu_timer_irq = MIPS_CPU_IRQ_BASE + cp0_compare_irq;
++	return mips_cpu_timer_irq;
++}
++
++void __init plat_time_init(void)
++{
++	/* calculate mips_hpt_frequency based on PNX833X_CLOCK_CPUCP_CTL reg */
++
++	extern unsigned long mips_hpt_frequency;
++	unsigned long reg = PNX833X_CLOCK_CPUCP_CTL;
++
++	if (!(PNX833X_BIT(reg, CLOCK_CPUCP_CTL, EXIT_RESET))) {
++		/* Functional clock is disabled so use crystal frequency */
++		mips_hpt_frequency = 25;
++	} else {
++#if defined(CONFIG_SOC_PNX8335)
++		/* Functional clock is enabled, so get clock multiplier */
++		mips_hpt_frequency = 90 + (10 * PNX8335_REGFIELD(CLOCK_PLL_CPU_CTL, FREQ));
++#else
++		static const unsigned long int freq[4] = {240, 160, 120, 80};
++		mips_hpt_frequency = freq[PNX833X_FIELD(reg, CLOCK_CPUCP_CTL, DIV_CLOCK)];
++#endif
++	}
++
++	printk(KERN_INFO "CPU clock is %ld MHz\n", mips_hpt_frequency);
++
++	mips_hpt_frequency *= 500000;
++}
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/Makefile linux-5.11/arch/mips/pnx833x/common/Makefile
+--- linux-5.11.orig/arch/mips/pnx833x/common/Makefile	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/Makefile	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,2 @@
++# SPDX-License-Identifier: GPL-2.0-only
++obj-y := interrupts.o platform.o prom.o setup.o reset.o gdb_hook.o
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/platform.c linux-5.11/arch/mips/pnx833x/common/platform.c
+--- linux-5.11.orig/arch/mips/pnx833x/common/platform.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/platform.c	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,230 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  platform.c: platform support for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ *
++ *  Based on software written by:
++ *	Nikita Youshchenko <yoush@debian.org>, based on PNX8550 code.
++ */
++#include <linux/device.h>
++#include <linux/dma-mapping.h>
++#include <linux/platform_device.h>
++#include <linux/kernel.h>
++#include <linux/init.h>
++#include <linux/resource.h>
++#include <linux/serial.h>
++#include <linux/serial_pnx8xxx.h>
++#include <linux/mtd/platnand.h>
++
++#include <irq.h>
++#include <irq-mapping.h>
++#include <pnx833x.h>
++
++static u64 uart_dmamask	    = DMA_BIT_MASK(32);
++
++static struct resource pnx833x_uart_resources[] = {
++	[0] = {
++		.start		= PNX833X_UART0_PORTS_START,
++		.end		= PNX833X_UART0_PORTS_END,
++		.flags		= IORESOURCE_MEM,
++	},
++	[1] = {
++		.start		= PNX833X_PIC_UART0_INT,
++		.end		= PNX833X_PIC_UART0_INT,
++		.flags		= IORESOURCE_IRQ,
++	},
++	[2] = {
++		.start		= PNX833X_UART1_PORTS_START,
++		.end		= PNX833X_UART1_PORTS_END,
++		.flags		= IORESOURCE_MEM,
++	},
++	[3] = {
++		.start		= PNX833X_PIC_UART1_INT,
++		.end		= PNX833X_PIC_UART1_INT,
++		.flags		= IORESOURCE_IRQ,
++	},
++};
++
++struct pnx8xxx_port pnx8xxx_ports[] = {
++	[0] = {
++		.port	= {
++			.type		= PORT_PNX8XXX,
++			.iotype		= UPIO_MEM,
++			.membase	= (void __iomem *)PNX833X_UART0_PORTS_START,
++			.mapbase	= PNX833X_UART0_PORTS_START,
++			.irq		= PNX833X_PIC_UART0_INT,
++			.uartclk	= 3692300,
++			.fifosize	= 16,
++			.flags		= UPF_BOOT_AUTOCONF,
++			.line		= 0,
++		},
++	},
++	[1] = {
++		.port	= {
++			.type		= PORT_PNX8XXX,
++			.iotype		= UPIO_MEM,
++			.membase	= (void __iomem *)PNX833X_UART1_PORTS_START,
++			.mapbase	= PNX833X_UART1_PORTS_START,
++			.irq		= PNX833X_PIC_UART1_INT,
++			.uartclk	= 3692300,
++			.fifosize	= 16,
++			.flags		= UPF_BOOT_AUTOCONF,
++			.line		= 1,
++		},
++	},
++};
++
++static struct platform_device pnx833x_uart_device = {
++	.name		= "pnx8xxx-uart",
++	.id		= -1,
++	.dev = {
++		.dma_mask		= &uart_dmamask,
++		.coherent_dma_mask	= DMA_BIT_MASK(32),
++		.platform_data		= pnx8xxx_ports,
++	},
++	.num_resources	= ARRAY_SIZE(pnx833x_uart_resources),
++	.resource	= pnx833x_uart_resources,
++};
++
++static u64 ehci_dmamask	    = DMA_BIT_MASK(32);
++
++static struct resource pnx833x_usb_ehci_resources[] = {
++	[0] = {
++		.start		= PNX833X_USB_PORTS_START,
++		.end		= PNX833X_USB_PORTS_END,
++		.flags		= IORESOURCE_MEM,
++	},
++	[1] = {
++		.start		= PNX833X_PIC_USB_INT,
++		.end		= PNX833X_PIC_USB_INT,
++		.flags		= IORESOURCE_IRQ,
++	},
++};
++
++static struct platform_device pnx833x_usb_ehci_device = {
++	.name		= "pnx833x-ehci",
++	.id		= -1,
++	.dev = {
++		.dma_mask		= &ehci_dmamask,
++		.coherent_dma_mask	= DMA_BIT_MASK(32),
++	},
++	.num_resources	= ARRAY_SIZE(pnx833x_usb_ehci_resources),
++	.resource	= pnx833x_usb_ehci_resources,
++};
++
++static u64 ethernet_dmamask = DMA_BIT_MASK(32);
++
++static struct resource pnx833x_ethernet_resources[] = {
++	[0] = {
++		.start = PNX8335_IP3902_PORTS_START,
++		.end   = PNX8335_IP3902_PORTS_END,
++		.flags = IORESOURCE_MEM,
++	},
++#ifdef CONFIG_SOC_PNX8335
++	[1] = {
++		.start = PNX8335_PIC_ETHERNET_INT,
++		.end   = PNX8335_PIC_ETHERNET_INT,
++		.flags = IORESOURCE_IRQ,
++	},
++#endif
++};
++
++static struct platform_device pnx833x_ethernet_device = {
++	.name = "ip3902-eth",
++	.id   = -1,
++	.dev  = {
++		.dma_mask	   = &ethernet_dmamask,
++		.coherent_dma_mask = DMA_BIT_MASK(32),
++	},
++	.num_resources = ARRAY_SIZE(pnx833x_ethernet_resources),
++	.resource      = pnx833x_ethernet_resources,
++};
++
++static struct resource pnx833x_sata_resources[] = {
++	[0] = {
++		.start = PNX8335_SATA_PORTS_START,
++		.end   = PNX8335_SATA_PORTS_END,
++		.flags = IORESOURCE_MEM,
++	},
++	[1] = {
++		.start = PNX8335_PIC_SATA_INT,
++		.end   = PNX8335_PIC_SATA_INT,
++		.flags = IORESOURCE_IRQ,
++	},
++};
++
++static struct platform_device pnx833x_sata_device = {
++	.name	       = "pnx833x-sata",
++	.id	       = -1,
++	.num_resources = ARRAY_SIZE(pnx833x_sata_resources),
++	.resource      = pnx833x_sata_resources,
++};
++
++static void
++pnx833x_flash_nand_cmd_ctrl(struct nand_chip *this, int cmd, unsigned int ctrl)
++{
++	unsigned long nandaddr = (unsigned long)this->legacy.IO_ADDR_W;
++
++	if (cmd == NAND_CMD_NONE)
++		return;
++
++	if (ctrl & NAND_CLE)
++		writeb(cmd, (void __iomem *)(nandaddr + PNX8335_NAND_CLE_MASK));
++	else
++		writeb(cmd, (void __iomem *)(nandaddr + PNX8335_NAND_ALE_MASK));
++}
++
++static struct platform_nand_data pnx833x_flash_nand_data = {
++	.chip = {
++		.nr_chips		= 1,
++		.chip_delay		= 25,
++	},
++	.ctrl = {
++		.cmd_ctrl		= pnx833x_flash_nand_cmd_ctrl
++	}
++};
++
++/*
++ * Set start to be the correct address (PNX8335_NAND_BASE with no 0xb!!),
++ * 12 bytes more seems to be the standard that allows for NAND access.
++ */
++static struct resource pnx833x_flash_nand_resource = {
++	.start	= PNX8335_NAND_BASE,
++	.end	= PNX8335_NAND_BASE + 12,
++	.flags	= IORESOURCE_MEM,
++};
++
++static struct platform_device pnx833x_flash_nand = {
++	.name		= "gen_nand",
++	.id			= -1,
++	.num_resources	= 1,
++	.resource	    = &pnx833x_flash_nand_resource,
++	.dev		= {
++		.platform_data = &pnx833x_flash_nand_data,
++	},
++};
++
++static struct platform_device pnx833x_wdt_device = {
++	.name		= "pnx833x_wdt",
++	.id		= -1,
++};
++
++static struct platform_device *pnx833x_platform_devices[] __initdata = {
++	&pnx833x_uart_device,
++	&pnx833x_usb_ehci_device,
++	&pnx833x_ethernet_device,
++	&pnx833x_sata_device,
++	&pnx833x_flash_nand,
++	&pnx833x_wdt_device,
++};
++
++static int __init pnx833x_platform_init(void)
++{
++	return platform_add_devices(pnx833x_platform_devices,
++				    ARRAY_SIZE(pnx833x_platform_devices));
++}
++
++arch_initcall(pnx833x_platform_init);
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/prom.c linux-5.11/arch/mips/pnx833x/common/prom.c
+--- linux-5.11.orig/arch/mips/pnx833x/common/prom.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/prom.c	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,51 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  prom.c:
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ *
++ *  Based on software written by:
++ *	Nikita Youshchenko <yoush@debian.org>, based on PNX8550 code.
++ */
++#include <linux/init.h>
++#include <asm/bootinfo.h>
++#include <linux/string.h>
++
++void __init prom_init_cmdline(void)
++{
++	int argc = fw_arg0;
++	char **argv = (char **)fw_arg1;
++	char *c = &(arcs_cmdline[0]);
++	int i;
++
++	for (i = 1; i < argc; i++) {
++		strcpy(c, argv[i]);
++		c += strlen(argv[i]);
++		if (i < argc-1)
++			*c++ = ' ';
++	}
++	*c = 0;
++}
++
++char __init *prom_getenv(char *envname)
++{
++	extern char **prom_envp;
++	char **env = prom_envp;
++	int i;
++
++	i = strlen(envname);
++
++	while (*env) {
++		if (strncmp(envname, *env, i) == 0 && *(*env+i) == '=')
++			return *env + i + 1;
++		env++;
++	}
++
++	return 0;
++}
++
++void __init prom_free_prom_memory(void)
++{
++}
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/reset.c linux-5.11/arch/mips/pnx833x/common/reset.c
+--- linux-5.11.orig/arch/mips/pnx833x/common/reset.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/reset.c	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,31 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  reset.c: reset support for PNX833X.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ *
++ *  Based on software written by:
++ *	Nikita Youshchenko <yoush@debian.org>, based on PNX8550 code.
++ */
++#include <linux/reboot.h>
++#include <pnx833x.h>
++
++void pnx833x_machine_restart(char *command)
++{
++	PNX833X_RESET_CONTROL_2 = 0;
++	PNX833X_RESET_CONTROL = 0;
++}
++
++void pnx833x_machine_halt(void)
++{
++	while (1)
++		__asm__ __volatile__ ("wait");
++
++}
++
++void pnx833x_machine_power_off(void)
++{
++	pnx833x_machine_halt();
++}
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/common/setup.c linux-5.11/arch/mips/pnx833x/common/setup.c
+--- linux-5.11.orig/arch/mips/pnx833x/common/setup.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/common/setup.c	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,53 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  setup.c: Setup PNX833X Soc.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ *
++ *  Based on software written by:
++ *	Nikita Youshchenko <yoush@debian.org>, based on PNX8550 code.
++ */
++#include <linux/init.h>
++#include <linux/interrupt.h>
++#include <linux/ioport.h>
++#include <linux/io.h>
++#include <linux/pci.h>
++#include <asm/reboot.h>
++#include <pnx833x.h>
++#include <gpio.h>
++
++extern void pnx833x_board_setup(void);
++extern void pnx833x_machine_restart(char *);
++extern void pnx833x_machine_halt(void);
++extern void pnx833x_machine_power_off(void);
++
++int __init plat_mem_setup(void)
++{
++	/* set mips clock to 400MHz */
++#if defined(CONFIG_SOC_PNX8335)
++	PNX8335_WRITEFIELD(0x1F, CLOCK_PLL_CPU_CTL, FREQ);
++#endif
++	pnx833x_gpio_init();	/* so it will be ready in board_setup() */
++
++	pnx833x_board_setup();
++
++	_machine_restart = pnx833x_machine_restart;
++	_machine_halt = pnx833x_machine_halt;
++	pm_power_off = pnx833x_machine_power_off;
++
++	/* IO/MEM resources. */
++	set_io_port_base(KSEG1);
++	ioport_resource.start = 0;
++	ioport_resource.end = ~0;
++	iomem_resource.start = 0;
++	iomem_resource.end = ~0;
++
++#if defined(CONFIG_SOC_PNX8335)
++	/* Allows full bandwidth for CPU when no AGU request is pending */
++	PNX8335_WRITEFIELD(0x1, SIF_CPU_OPTIMIZATION, CPU_FREE);
++#endif
++
++	return 0;
++}
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/Makefile linux-5.11/arch/mips/pnx833x/Makefile
+--- linux-5.11.orig/arch/mips/pnx833x/Makefile	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/Makefile	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,4 @@
++# SPDX-License-Identifier: GPL-2.0-only
++obj-$(CONFIG_SOC_PNX833X)	+= common/
++obj-$(CONFIG_NXP_STB220)	+= stb22x/
++obj-$(CONFIG_NXP_STB225)	+= stb22x/
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/Platform linux-5.11/arch/mips/pnx833x/Platform
+--- linux-5.11.orig/arch/mips/pnx833x/Platform	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/Platform	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,4 @@
++# NXP STB225
++cflags-$(CONFIG_SOC_PNX833X)	+= -I$(srctree)/arch/mips/include/asm/mach-pnx833x
++load-$(CONFIG_NXP_STB220)	+= 0xffffffff80001000
++load-$(CONFIG_NXP_STB225)	+= 0xffffffff80001000
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/stb22x/board.c linux-5.11/arch/mips/pnx833x/stb22x/board.c
+--- linux-5.11.orig/arch/mips/pnx833x/stb22x/board.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/stb22x/board.c	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,79 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  board.c: STB225 board support.
++ *
++ *  Copyright 2008 NXP Semiconductors
++ *	  Chris Steel <chris.steel@nxp.com>
++ *    Daniel Laird <daniel.j.laird@nxp.com>
++ *
++ *  Based on software written by:
++ *	Nikita Youshchenko <yoush@debian.org>, based on PNX8550 code.
++ */
++#include <linux/init.h>
++#include <asm/bootinfo.h>
++#include <linux/memblock.h>
++#include <linux/mm.h>
++#include <pnx833x.h>
++#include <gpio.h>
++
++/* endianess twiddlers */
++#define PNX8335_DEBUG0 0x4400
++#define PNX8335_DEBUG1 0x4404
++#define PNX8335_DEBUG2 0x4408
++#define PNX8335_DEBUG3 0x440c
++#define PNX8335_DEBUG4 0x4410
++#define PNX8335_DEBUG5 0x4414
++#define PNX8335_DEBUG6 0x4418
++#define PNX8335_DEBUG7 0x441c
++
++int prom_argc;
++char **prom_argv, **prom_envp;
++
++extern void prom_init_cmdline(void);
++extern char *prom_getenv(char *envname);
++
++const char *get_system_type(void)
++{
++	return "NXP STB22x";
++}
++
++static inline unsigned long env_or_default(char *env, unsigned long dfl)
++{
++	char *str = prom_getenv(env);
++	return str ? simple_strtol(str, 0, 0) : dfl;
++}
++
++void __init prom_init(void)
++{
++	unsigned long memsize;
++
++	prom_argc = fw_arg0;
++	prom_argv = (char **)fw_arg1;
++	prom_envp = (char **)fw_arg2;
++
++	prom_init_cmdline();
++
++	memsize = env_or_default("memsize", 0x02000000);
++	memblock_add(0, memsize);
++}
++
++void __init pnx833x_board_setup(void)
++{
++	PNX833X_REG(0x9204) = 0x03; // CLK_PCP_CTL PI-bus 80 Mhz
++
++#if defined(CONFIG_USB) || defined(CONFIG_USB_MODULE)
++	pnx833x_gpio_select_function_alt(25);
++	pnx833x_gpio_select_function_alt(26);
++#endif
++
++#if defined(CONFIG_IP3902) || defined(CONFIG_IP3902_MODULE)
++	/* Configure GPIOs 27-33 for MII interface to Ethernet phy */
++	pnx833x_gpio_select_function_alt(27);
++	pnx833x_gpio_select_function_alt(28);
++	pnx833x_gpio_select_function_alt(29);
++	pnx833x_gpio_select_function_alt(30);
++	pnx833x_gpio_select_function_alt(31);
++	pnx833x_gpio_select_function_alt(32);
++	pnx833x_gpio_select_function_alt(33);
++#endif
++}
+diff -Naur linux-5.11.orig/arch/mips/pnx833x/stb22x/Makefile linux-5.11/arch/mips/pnx833x/stb22x/Makefile
+--- linux-5.11.orig/arch/mips/pnx833x/stb22x/Makefile	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/arch/mips/pnx833x/stb22x/Makefile	2021-02-19 16:02:12.880699519 +0300
+@@ -0,0 +1,2 @@
++# SPDX-License-Identifier: GPL-2.0-only
++obj-y := board.o
+diff -Naur linux-5.11.orig/drivers/tty/serial/Kconfig linux-5.11/drivers/tty/serial/Kconfig
+--- linux-5.11.orig/drivers/tty/serial/Kconfig	2021-02-15 01:32:24.000000000 +0300
++++ linux-5.11/drivers/tty/serial/Kconfig	2021-02-19 15:56:15.070643535 +0300
+@@ -704,6 +704,22 @@
+ 	depends on SERIAL_SH_SCI && DMA_ENGINE
+ 	default ARCH_RENESAS
+ 
++config SERIAL_PNX8XXX
++	bool "Enable PNX8XXX SoCs' UART Support"
++	depends on SOC_PNX833X
++	select SERIAL_CORE
++	help
++	  If you have a MIPS-based Philips SoC such as PNX8330 and you want
++	  to use serial ports, say Y.  Otherwise, say N.
++
++config SERIAL_PNX8XXX_CONSOLE
++	bool "Enable PNX8XX0 serial console"
++	depends on SERIAL_PNX8XXX
++	select SERIAL_CORE_CONSOLE
++	help
++	  If you have a MIPS-based Philips SoC such as PNX8330 and you want
++	  to use serial console, say Y. Otherwise, say N.
++
+ config SERIAL_HS_LPC32XX
+ 	tristate "LPC32XX high speed serial port support"
+ 	depends on ARCH_LPC32XX || COMPILE_TEST
+diff -Naur linux-5.11.orig/drivers/tty/serial/pnx8xxx_uart.c linux-5.11/drivers/tty/serial/pnx8xxx_uart.c
+--- linux-5.11.orig/drivers/tty/serial/pnx8xxx_uart.c	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/drivers/tty/serial/pnx8xxx_uart.c	2021-02-19 15:50:17.076504861 +0300
+@@ -0,0 +1,858 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * UART driver for PNX8XXX SoCs
++ *
++ * Author: Per Hallsmark per.hallsmark@mvista.com
++ * Ported to 2.6 kernel by EmbeddedAlley
++ * Reworked by Vitaly Wool <vitalywool@gmail.com>
++ *
++ * Based on drivers/char/serial.c, by Linus Torvalds, Theodore Ts'o.
++ * Copyright (C) 2000 Deep Blue Solutions Ltd.
++ */
++
++#include <linux/module.h>
++#include <linux/ioport.h>
++#include <linux/init.h>
++#include <linux/console.h>
++#include <linux/sysrq.h>
++#include <linux/device.h>
++#include <linux/platform_device.h>
++#include <linux/tty.h>
++#include <linux/tty_flip.h>
++#include <linux/serial_core.h>
++#include <linux/serial.h>
++#include <linux/serial_pnx8xxx.h>
++
++#include <asm/io.h>
++#include <asm/irq.h>
++
++/* We'll be using StrongARM sa1100 serial port major/minor */
++#define SERIAL_PNX8XXX_MAJOR	204
++#define MINOR_START		5
++
++#define NR_PORTS		2
++
++#define PNX8XXX_ISR_PASS_LIMIT	256
++
++/*
++ * Convert from ignore_status_mask or read_status_mask to FIFO
++ * and interrupt status bits
++ */
++#define SM_TO_FIFO(x)	((x) >> 10)
++#define SM_TO_ISTAT(x)	((x) & 0x000001ff)
++#define FIFO_TO_SM(x)	((x) << 10)
++#define ISTAT_TO_SM(x)	((x) & 0x000001ff)
++
++/*
++ * This is the size of our serial port register set.
++ */
++#define UART_PORT_SIZE	0x1000
++
++/*
++ * This determines how often we check the modem status signals
++ * for any change.  They generally aren't connected to an IRQ
++ * so we have to poll them.  We also check immediately before
++ * filling the TX fifo incase CTS has been dropped.
++ */
++#define MCTRL_TIMEOUT	(250*HZ/1000)
++
++extern struct pnx8xxx_port pnx8xxx_ports[];
++
++static inline int serial_in(struct pnx8xxx_port *sport, int offset)
++{
++	return (__raw_readl(sport->port.membase + offset));
++}
++
++static inline void serial_out(struct pnx8xxx_port *sport, int offset, int value)
++{
++	__raw_writel(value, sport->port.membase + offset);
++}
++
++/*
++ * Handle any change of modem status signal since we were last called.
++ */
++static void pnx8xxx_mctrl_check(struct pnx8xxx_port *sport)
++{
++	unsigned int status, changed;
++
++	status = sport->port.ops->get_mctrl(&sport->port);
++	changed = status ^ sport->old_status;
++
++	if (changed == 0)
++		return;
++
++	sport->old_status = status;
++
++	if (changed & TIOCM_RI)
++		sport->port.icount.rng++;
++	if (changed & TIOCM_DSR)
++		sport->port.icount.dsr++;
++	if (changed & TIOCM_CAR)
++		uart_handle_dcd_change(&sport->port, status & TIOCM_CAR);
++	if (changed & TIOCM_CTS)
++		uart_handle_cts_change(&sport->port, status & TIOCM_CTS);
++
++	wake_up_interruptible(&sport->port.state->port.delta_msr_wait);
++}
++
++/*
++ * This is our per-port timeout handler, for checking the
++ * modem status signals.
++ */
++static void pnx8xxx_timeout(struct timer_list *t)
++{
++	struct pnx8xxx_port *sport = from_timer(sport, t, timer);
++	unsigned long flags;
++
++	if (sport->port.state) {
++		spin_lock_irqsave(&sport->port.lock, flags);
++		pnx8xxx_mctrl_check(sport);
++		spin_unlock_irqrestore(&sport->port.lock, flags);
++
++		mod_timer(&sport->timer, jiffies + MCTRL_TIMEOUT);
++	}
++}
++
++/*
++ * interrupts disabled on entry
++ */
++static void pnx8xxx_stop_tx(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	u32 ien;
++
++	/* Disable TX intr */
++	ien = serial_in(sport, PNX8XXX_IEN);
++	serial_out(sport, PNX8XXX_IEN, ien & ~PNX8XXX_UART_INT_ALLTX);
++
++	/* Clear all pending TX intr */
++	serial_out(sport, PNX8XXX_ICLR, PNX8XXX_UART_INT_ALLTX);
++}
++
++/*
++ * interrupts may not be disabled on entry
++ */
++static void pnx8xxx_start_tx(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	u32 ien;
++
++	/* Clear all pending TX intr */
++	serial_out(sport, PNX8XXX_ICLR, PNX8XXX_UART_INT_ALLTX);
++
++	/* Enable TX intr */
++	ien = serial_in(sport, PNX8XXX_IEN);
++	serial_out(sport, PNX8XXX_IEN, ien | PNX8XXX_UART_INT_ALLTX);
++}
++
++/*
++ * Interrupts enabled
++ */
++static void pnx8xxx_stop_rx(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	u32 ien;
++
++	/* Disable RX intr */
++	ien = serial_in(sport, PNX8XXX_IEN);
++	serial_out(sport, PNX8XXX_IEN, ien & ~PNX8XXX_UART_INT_ALLRX);
++
++	/* Clear all pending RX intr */
++	serial_out(sport, PNX8XXX_ICLR, PNX8XXX_UART_INT_ALLRX);
++}
++
++/*
++ * Set the modem control timer to fire immediately.
++ */
++static void pnx8xxx_enable_ms(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++
++	mod_timer(&sport->timer, jiffies);
++}
++
++static void pnx8xxx_rx_chars(struct pnx8xxx_port *sport)
++{
++	unsigned int status, ch, flg;
++
++	status = FIFO_TO_SM(serial_in(sport, PNX8XXX_FIFO)) |
++		 ISTAT_TO_SM(serial_in(sport, PNX8XXX_ISTAT));
++	while (status & FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFIFO)) {
++		ch = serial_in(sport, PNX8XXX_FIFO) & 0xff;
++
++		sport->port.icount.rx++;
++
++		flg = TTY_NORMAL;
++
++		/*
++		 * note that the error handling code is
++		 * out of the main execution path
++		 */
++		if (status & (FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFE |
++					PNX8XXX_UART_FIFO_RXPAR |
++					PNX8XXX_UART_FIFO_RXBRK) |
++			      ISTAT_TO_SM(PNX8XXX_UART_INT_RXOVRN))) {
++			if (status & FIFO_TO_SM(PNX8XXX_UART_FIFO_RXBRK)) {
++				status &= ~(FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFE) |
++					FIFO_TO_SM(PNX8XXX_UART_FIFO_RXPAR));
++				sport->port.icount.brk++;
++				if (uart_handle_break(&sport->port))
++					goto ignore_char;
++			} else if (status & FIFO_TO_SM(PNX8XXX_UART_FIFO_RXPAR))
++				sport->port.icount.parity++;
++			else if (status & FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFE))
++				sport->port.icount.frame++;
++			if (status & ISTAT_TO_SM(PNX8XXX_UART_INT_RXOVRN))
++				sport->port.icount.overrun++;
++
++			status &= sport->port.read_status_mask;
++
++			if (status & FIFO_TO_SM(PNX8XXX_UART_FIFO_RXPAR))
++				flg = TTY_PARITY;
++			else if (status & FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFE))
++				flg = TTY_FRAME;
++
++			sport->port.sysrq = 0;
++		}
++
++		if (uart_handle_sysrq_char(&sport->port, ch))
++			goto ignore_char;
++
++		uart_insert_char(&sport->port, status,
++				ISTAT_TO_SM(PNX8XXX_UART_INT_RXOVRN), ch, flg);
++
++	ignore_char:
++		serial_out(sport, PNX8XXX_LCR, serial_in(sport, PNX8XXX_LCR) |
++				PNX8XXX_UART_LCR_RX_NEXT);
++		status = FIFO_TO_SM(serial_in(sport, PNX8XXX_FIFO)) |
++			 ISTAT_TO_SM(serial_in(sport, PNX8XXX_ISTAT));
++	}
++
++	spin_unlock(&sport->port.lock);
++	tty_flip_buffer_push(&sport->port.state->port);
++	spin_lock(&sport->port.lock);
++}
++
++static void pnx8xxx_tx_chars(struct pnx8xxx_port *sport)
++{
++	struct circ_buf *xmit = &sport->port.state->xmit;
++
++	if (sport->port.x_char) {
++		serial_out(sport, PNX8XXX_FIFO, sport->port.x_char);
++		sport->port.icount.tx++;
++		sport->port.x_char = 0;
++		return;
++	}
++
++	/*
++	 * Check the modem control lines before
++	 * transmitting anything.
++	 */
++	pnx8xxx_mctrl_check(sport);
++
++	if (uart_circ_empty(xmit) || uart_tx_stopped(&sport->port)) {
++		pnx8xxx_stop_tx(&sport->port);
++		return;
++	}
++
++	/*
++	 * TX while bytes available
++	 */
++	while (((serial_in(sport, PNX8XXX_FIFO) &
++					PNX8XXX_UART_FIFO_TXFIFO) >> 16) < 16) {
++		serial_out(sport, PNX8XXX_FIFO, xmit->buf[xmit->tail]);
++		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
++		sport->port.icount.tx++;
++		if (uart_circ_empty(xmit))
++			break;
++	}
++
++	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
++		uart_write_wakeup(&sport->port);
++
++	if (uart_circ_empty(xmit))
++		pnx8xxx_stop_tx(&sport->port);
++}
++
++static irqreturn_t pnx8xxx_int(int irq, void *dev_id)
++{
++	struct pnx8xxx_port *sport = dev_id;
++	unsigned int status;
++
++	spin_lock(&sport->port.lock);
++	/* Get the interrupts */
++	status  = serial_in(sport, PNX8XXX_ISTAT) & serial_in(sport, PNX8XXX_IEN);
++
++	/* Byte or break signal received */
++	if (status & (PNX8XXX_UART_INT_RX | PNX8XXX_UART_INT_BREAK))
++		pnx8xxx_rx_chars(sport);
++
++	/* TX holding register empty - transmit a byte */
++	if (status & PNX8XXX_UART_INT_TX)
++		pnx8xxx_tx_chars(sport);
++
++	/* Clear the ISTAT register */
++	serial_out(sport, PNX8XXX_ICLR, status);
++
++	spin_unlock(&sport->port.lock);
++	return IRQ_HANDLED;
++}
++
++/*
++ * Return TIOCSER_TEMT when transmitter is not busy.
++ */
++static unsigned int pnx8xxx_tx_empty(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++
++	return serial_in(sport, PNX8XXX_FIFO) & PNX8XXX_UART_FIFO_TXFIFO_STA ? 0 : TIOCSER_TEMT;
++}
++
++static unsigned int pnx8xxx_get_mctrl(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	unsigned int mctrl = TIOCM_DSR;
++	unsigned int msr;
++
++	/* REVISIT */
++
++	msr = serial_in(sport, PNX8XXX_MCR);
++
++	mctrl |= msr & PNX8XXX_UART_MCR_CTS ? TIOCM_CTS : 0;
++	mctrl |= msr & PNX8XXX_UART_MCR_DCD ? TIOCM_CAR : 0;
++
++	return mctrl;
++}
++
++static void pnx8xxx_set_mctrl(struct uart_port *port, unsigned int mctrl)
++{
++#if	0	/* FIXME */
++	struct pnx8xxx_port *sport = (struct pnx8xxx_port *)port;
++	unsigned int msr;
++#endif
++}
++
++/*
++ * Interrupts always disabled.
++ */
++static void pnx8xxx_break_ctl(struct uart_port *port, int break_state)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	unsigned long flags;
++	unsigned int lcr;
++
++	spin_lock_irqsave(&sport->port.lock, flags);
++	lcr = serial_in(sport, PNX8XXX_LCR);
++	if (break_state == -1)
++		lcr |= PNX8XXX_UART_LCR_TXBREAK;
++	else
++		lcr &= ~PNX8XXX_UART_LCR_TXBREAK;
++	serial_out(sport, PNX8XXX_LCR, lcr);
++	spin_unlock_irqrestore(&sport->port.lock, flags);
++}
++
++static int pnx8xxx_startup(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	int retval;
++
++	/*
++	 * Allocate the IRQ
++	 */
++	retval = request_irq(sport->port.irq, pnx8xxx_int, 0,
++			     "pnx8xxx-uart", sport);
++	if (retval)
++		return retval;
++
++	/*
++	 * Finally, clear and enable interrupts
++	 */
++
++	serial_out(sport, PNX8XXX_ICLR, PNX8XXX_UART_INT_ALLRX |
++			     PNX8XXX_UART_INT_ALLTX);
++
++	serial_out(sport, PNX8XXX_IEN, serial_in(sport, PNX8XXX_IEN) |
++			    PNX8XXX_UART_INT_ALLRX |
++			    PNX8XXX_UART_INT_ALLTX);
++
++	/*
++	 * Enable modem status interrupts
++	 */
++	spin_lock_irq(&sport->port.lock);
++	pnx8xxx_enable_ms(&sport->port);
++	spin_unlock_irq(&sport->port.lock);
++
++	return 0;
++}
++
++static void pnx8xxx_shutdown(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	int lcr;
++
++	/*
++	 * Stop our timer.
++	 */
++	del_timer_sync(&sport->timer);
++
++	/*
++	 * Disable all interrupts
++	 */
++	serial_out(sport, PNX8XXX_IEN, 0);
++
++	/*
++	 * Reset the Tx and Rx FIFOS, disable the break condition
++	 */
++	lcr = serial_in(sport, PNX8XXX_LCR);
++	lcr &= ~PNX8XXX_UART_LCR_TXBREAK;
++	lcr |= PNX8XXX_UART_LCR_TX_RST | PNX8XXX_UART_LCR_RX_RST;
++	serial_out(sport, PNX8XXX_LCR, lcr);
++
++	/*
++	 * Clear all interrupts
++	 */
++	serial_out(sport, PNX8XXX_ICLR, PNX8XXX_UART_INT_ALLRX |
++			     PNX8XXX_UART_INT_ALLTX);
++
++	/*
++	 * Free the interrupt
++	 */
++	free_irq(sport->port.irq, sport);
++}
++
++static void
++pnx8xxx_set_termios(struct uart_port *port, struct ktermios *termios,
++		   struct ktermios *old)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	unsigned long flags;
++	unsigned int lcr_fcr, old_ien, baud, quot;
++	unsigned int old_csize = old ? old->c_cflag & CSIZE : CS8;
++
++	/*
++	 * We only support CS7 and CS8.
++	 */
++	while ((termios->c_cflag & CSIZE) != CS7 &&
++	       (termios->c_cflag & CSIZE) != CS8) {
++		termios->c_cflag &= ~CSIZE;
++		termios->c_cflag |= old_csize;
++		old_csize = CS8;
++	}
++
++	if ((termios->c_cflag & CSIZE) == CS8)
++		lcr_fcr = PNX8XXX_UART_LCR_8BIT;
++	else
++		lcr_fcr = 0;
++
++	if (termios->c_cflag & CSTOPB)
++		lcr_fcr |= PNX8XXX_UART_LCR_2STOPB;
++	if (termios->c_cflag & PARENB) {
++		lcr_fcr |= PNX8XXX_UART_LCR_PAREN;
++		if (!(termios->c_cflag & PARODD))
++			lcr_fcr |= PNX8XXX_UART_LCR_PAREVN;
++	}
++
++	/*
++	 * Ask the core to calculate the divisor for us.
++	 */
++	baud = uart_get_baud_rate(port, termios, old, 0, port->uartclk/16);
++	quot = uart_get_divisor(port, baud);
++
++	spin_lock_irqsave(&sport->port.lock, flags);
++
++	sport->port.read_status_mask = ISTAT_TO_SM(PNX8XXX_UART_INT_RXOVRN) |
++				ISTAT_TO_SM(PNX8XXX_UART_INT_EMPTY) |
++				ISTAT_TO_SM(PNX8XXX_UART_INT_RX);
++	if (termios->c_iflag & INPCK)
++		sport->port.read_status_mask |=
++			FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFE) |
++			FIFO_TO_SM(PNX8XXX_UART_FIFO_RXPAR);
++	if (termios->c_iflag & (IGNBRK | BRKINT | PARMRK))
++		sport->port.read_status_mask |=
++			ISTAT_TO_SM(PNX8XXX_UART_INT_BREAK);
++
++	/*
++	 * Characters to ignore
++	 */
++	sport->port.ignore_status_mask = 0;
++	if (termios->c_iflag & IGNPAR)
++		sport->port.ignore_status_mask |=
++			FIFO_TO_SM(PNX8XXX_UART_FIFO_RXFE) |
++			FIFO_TO_SM(PNX8XXX_UART_FIFO_RXPAR);
++	if (termios->c_iflag & IGNBRK) {
++		sport->port.ignore_status_mask |=
++			ISTAT_TO_SM(PNX8XXX_UART_INT_BREAK);
++		/*
++		 * If we're ignoring parity and break indicators,
++		 * ignore overruns too (for real raw support).
++		 */
++		if (termios->c_iflag & IGNPAR)
++			sport->port.ignore_status_mask |=
++				ISTAT_TO_SM(PNX8XXX_UART_INT_RXOVRN);
++	}
++
++	/*
++	 * ignore all characters if CREAD is not set
++	 */
++	if ((termios->c_cflag & CREAD) == 0)
++		sport->port.ignore_status_mask |=
++			ISTAT_TO_SM(PNX8XXX_UART_INT_RX);
++
++	del_timer_sync(&sport->timer);
++
++	/*
++	 * Update the per-port timeout.
++	 */
++	uart_update_timeout(port, termios->c_cflag, baud);
++
++	/*
++	 * disable interrupts and drain transmitter
++	 */
++	old_ien = serial_in(sport, PNX8XXX_IEN);
++	serial_out(sport, PNX8XXX_IEN, old_ien & ~(PNX8XXX_UART_INT_ALLTX |
++					PNX8XXX_UART_INT_ALLRX));
++
++	while (serial_in(sport, PNX8XXX_FIFO) & PNX8XXX_UART_FIFO_TXFIFO_STA)
++		barrier();
++
++	/* then, disable everything */
++	serial_out(sport, PNX8XXX_IEN, 0);
++
++	/* Reset the Rx and Tx FIFOs too */
++	lcr_fcr |= PNX8XXX_UART_LCR_TX_RST;
++	lcr_fcr |= PNX8XXX_UART_LCR_RX_RST;
++
++	/* set the parity, stop bits and data size */
++	serial_out(sport, PNX8XXX_LCR, lcr_fcr);
++
++	/* set the baud rate */
++	quot -= 1;
++	serial_out(sport, PNX8XXX_BAUD, quot);
++
++	serial_out(sport, PNX8XXX_ICLR, -1);
++
++	serial_out(sport, PNX8XXX_IEN, old_ien);
++
++	if (UART_ENABLE_MS(&sport->port, termios->c_cflag))
++		pnx8xxx_enable_ms(&sport->port);
++
++	spin_unlock_irqrestore(&sport->port.lock, flags);
++}
++
++static const char *pnx8xxx_type(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++
++	return sport->port.type == PORT_PNX8XXX ? "PNX8XXX" : NULL;
++}
++
++/*
++ * Release the memory region(s) being used by 'port'.
++ */
++static void pnx8xxx_release_port(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++
++	release_mem_region(sport->port.mapbase, UART_PORT_SIZE);
++}
++
++/*
++ * Request the memory region(s) being used by 'port'.
++ */
++static int pnx8xxx_request_port(struct uart_port *port)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	return request_mem_region(sport->port.mapbase, UART_PORT_SIZE,
++			"pnx8xxx-uart") != NULL ? 0 : -EBUSY;
++}
++
++/*
++ * Configure/autoconfigure the port.
++ */
++static void pnx8xxx_config_port(struct uart_port *port, int flags)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++
++	if (flags & UART_CONFIG_TYPE &&
++	    pnx8xxx_request_port(&sport->port) == 0)
++		sport->port.type = PORT_PNX8XXX;
++}
++
++/*
++ * Verify the new serial_struct (for TIOCSSERIAL).
++ * The only change we allow are to the flags and type, and
++ * even then only between PORT_PNX8XXX and PORT_UNKNOWN
++ */
++static int
++pnx8xxx_verify_port(struct uart_port *port, struct serial_struct *ser)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port,	port);
++	int ret = 0;
++
++	if (ser->type != PORT_UNKNOWN && ser->type != PORT_PNX8XXX)
++		ret = -EINVAL;
++	if (sport->port.irq != ser->irq)
++		ret = -EINVAL;
++	if (ser->io_type != SERIAL_IO_MEM)
++		ret = -EINVAL;
++	if (sport->port.uartclk / 16 != ser->baud_base)
++		ret = -EINVAL;
++	if ((void *)sport->port.mapbase != ser->iomem_base)
++		ret = -EINVAL;
++	if (sport->port.iobase != ser->port)
++		ret = -EINVAL;
++	if (ser->hub6 != 0)
++		ret = -EINVAL;
++	return ret;
++}
++
++static const struct uart_ops pnx8xxx_pops = {
++	.tx_empty	= pnx8xxx_tx_empty,
++	.set_mctrl	= pnx8xxx_set_mctrl,
++	.get_mctrl	= pnx8xxx_get_mctrl,
++	.stop_tx	= pnx8xxx_stop_tx,
++	.start_tx	= pnx8xxx_start_tx,
++	.stop_rx	= pnx8xxx_stop_rx,
++	.enable_ms	= pnx8xxx_enable_ms,
++	.break_ctl	= pnx8xxx_break_ctl,
++	.startup	= pnx8xxx_startup,
++	.shutdown	= pnx8xxx_shutdown,
++	.set_termios	= pnx8xxx_set_termios,
++	.type		= pnx8xxx_type,
++	.release_port	= pnx8xxx_release_port,
++	.request_port	= pnx8xxx_request_port,
++	.config_port	= pnx8xxx_config_port,
++	.verify_port	= pnx8xxx_verify_port,
++};
++
++
++/*
++ * Setup the PNX8XXX serial ports.
++ *
++ * Note also that we support "console=ttySx" where "x" is either 0 or 1.
++ */
++static void __init pnx8xxx_init_ports(void)
++{
++	static int first = 1;
++	int i;
++
++	if (!first)
++		return;
++	first = 0;
++
++	for (i = 0; i < NR_PORTS; i++) {
++		timer_setup(&pnx8xxx_ports[i].timer, pnx8xxx_timeout, 0);
++		pnx8xxx_ports[i].port.ops = &pnx8xxx_pops;
++	}
++}
++
++#ifdef CONFIG_SERIAL_PNX8XXX_CONSOLE
++
++static void pnx8xxx_console_putchar(struct uart_port *port, int ch)
++{
++	struct pnx8xxx_port *sport =
++		container_of(port, struct pnx8xxx_port, port);
++	int status;
++
++	do {
++		/* Wait for UART_TX register to empty */
++		status = serial_in(sport, PNX8XXX_FIFO);
++	} while (status & PNX8XXX_UART_FIFO_TXFIFO);
++	serial_out(sport, PNX8XXX_FIFO, ch);
++}
++
++/*
++ * Interrupts are disabled on entering
++ */static void
++pnx8xxx_console_write(struct console *co, const char *s, unsigned int count)
++{
++	struct pnx8xxx_port *sport = &pnx8xxx_ports[co->index];
++	unsigned int old_ien, status;
++
++	/*
++	 *	First, save IEN and then disable interrupts
++	 */
++	old_ien = serial_in(sport, PNX8XXX_IEN);
++	serial_out(sport, PNX8XXX_IEN, old_ien & ~(PNX8XXX_UART_INT_ALLTX |
++					PNX8XXX_UART_INT_ALLRX));
++
++	uart_console_write(&sport->port, s, count, pnx8xxx_console_putchar);
++
++	/*
++	 *	Finally, wait for transmitter to become empty
++	 *	and restore IEN
++	 */
++	do {
++		/* Wait for UART_TX register to empty */
++		status = serial_in(sport, PNX8XXX_FIFO);
++	} while (status & PNX8XXX_UART_FIFO_TXFIFO);
++
++	/* Clear TX and EMPTY interrupt */
++	serial_out(sport, PNX8XXX_ICLR, PNX8XXX_UART_INT_TX |
++			     PNX8XXX_UART_INT_EMPTY);
++
++	serial_out(sport, PNX8XXX_IEN, old_ien);
++}
++
++static int __init
++pnx8xxx_console_setup(struct console *co, char *options)
++{
++	struct pnx8xxx_port *sport;
++	int baud = 38400;
++	int bits = 8;
++	int parity = 'n';
++	int flow = 'n';
++
++	/*
++	 * Check whether an invalid uart number has been specified, and
++	 * if so, search for the first available port that does have
++	 * console support.
++	 */
++	if (co->index == -1 || co->index >= NR_PORTS)
++		co->index = 0;
++	sport = &pnx8xxx_ports[co->index];
++
++	if (options)
++		uart_parse_options(options, &baud, &parity, &bits, &flow);
++
++	return uart_set_options(&sport->port, co, baud, parity, bits, flow);
++}
++
++static struct uart_driver pnx8xxx_reg;
++static struct console pnx8xxx_console = {
++	.name		= "ttyS",
++	.write		= pnx8xxx_console_write,
++	.device		= uart_console_device,
++	.setup		= pnx8xxx_console_setup,
++	.flags		= CON_PRINTBUFFER,
++	.index		= -1,
++	.data		= &pnx8xxx_reg,
++};
++
++static int __init pnx8xxx_rs_console_init(void)
++{
++	pnx8xxx_init_ports();
++	register_console(&pnx8xxx_console);
++	return 0;
++}
++console_initcall(pnx8xxx_rs_console_init);
++
++#define PNX8XXX_CONSOLE	&pnx8xxx_console
++#else
++#define PNX8XXX_CONSOLE	NULL
++#endif
++
++static struct uart_driver pnx8xxx_reg = {
++	.owner			= THIS_MODULE,
++	.driver_name		= "ttyS",
++	.dev_name		= "ttyS",
++	.major			= SERIAL_PNX8XXX_MAJOR,
++	.minor			= MINOR_START,
++	.nr			= NR_PORTS,
++	.cons			= PNX8XXX_CONSOLE,
++};
++
++static int pnx8xxx_serial_suspend(struct platform_device *pdev, pm_message_t state)
++{
++	struct pnx8xxx_port *sport = platform_get_drvdata(pdev);
++
++	return uart_suspend_port(&pnx8xxx_reg, &sport->port);
++}
++
++static int pnx8xxx_serial_resume(struct platform_device *pdev)
++{
++	struct pnx8xxx_port *sport = platform_get_drvdata(pdev);
++
++	return uart_resume_port(&pnx8xxx_reg, &sport->port);
++}
++
++static int pnx8xxx_serial_probe(struct platform_device *pdev)
++{
++	struct resource *res = pdev->resource;
++	int i;
++
++	for (i = 0; i < pdev->num_resources; i++, res++) {
++		if (!(res->flags & IORESOURCE_MEM))
++			continue;
++
++		for (i = 0; i < NR_PORTS; i++) {
++			if (pnx8xxx_ports[i].port.mapbase != res->start)
++				continue;
++
++			pnx8xxx_ports[i].port.has_sysrq = IS_ENABLED(CONFIG_SERIAL_PNX8XXX_CONSOLE);
++			pnx8xxx_ports[i].port.dev = &pdev->dev;
++			uart_add_one_port(&pnx8xxx_reg, &pnx8xxx_ports[i].port);
++			platform_set_drvdata(pdev, &pnx8xxx_ports[i]);
++			break;
++		}
++	}
++
++	return 0;
++}
++
++static int pnx8xxx_serial_remove(struct platform_device *pdev)
++{
++	struct pnx8xxx_port *sport = platform_get_drvdata(pdev);
++
++	if (sport)
++		uart_remove_one_port(&pnx8xxx_reg, &sport->port);
++
++	return 0;
++}
++
++static struct platform_driver pnx8xxx_serial_driver = {
++	.driver		= {
++		.name	= "pnx8xxx-uart",
++	},
++	.probe		= pnx8xxx_serial_probe,
++	.remove		= pnx8xxx_serial_remove,
++	.suspend	= pnx8xxx_serial_suspend,
++	.resume		= pnx8xxx_serial_resume,
++};
++
++static int __init pnx8xxx_serial_init(void)
++{
++	int ret;
++
++	printk(KERN_INFO "Serial: PNX8XXX driver\n");
++
++	pnx8xxx_init_ports();
++
++	ret = uart_register_driver(&pnx8xxx_reg);
++	if (ret == 0) {
++		ret = platform_driver_register(&pnx8xxx_serial_driver);
++		if (ret)
++			uart_unregister_driver(&pnx8xxx_reg);
++	}
++	return ret;
++}
++
++static void __exit pnx8xxx_serial_exit(void)
++{
++	platform_driver_unregister(&pnx8xxx_serial_driver);
++	uart_unregister_driver(&pnx8xxx_reg);
++}
++
++module_init(pnx8xxx_serial_init);
++module_exit(pnx8xxx_serial_exit);
++
++MODULE_AUTHOR("Embedded Alley Solutions, Inc.");
++MODULE_DESCRIPTION("PNX8XXX SoCs serial port driver");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS_CHARDEV_MAJOR(SERIAL_PNX8XXX_MAJOR);
++MODULE_ALIAS("platform:pnx8xxx-uart");
+diff -Naur linux-5.11.orig/include/linux/serial_pnx8xxx.h linux-5.11/include/linux/serial_pnx8xxx.h
+--- linux-5.11.orig/include/linux/serial_pnx8xxx.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-5.11/include/linux/serial_pnx8xxx.h	2021-02-19 15:49:51.792636321 +0300
+@@ -0,0 +1,67 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Embedded Alley Solutions, source@embeddedalley.com.
++ */
++
++#ifndef _LINUX_SERIAL_PNX8XXX_H
++#define _LINUX_SERIAL_PNX8XXX_H
++
++#include <linux/serial_core.h>
++
++#define PNX8XXX_NR_PORTS	2
++
++struct pnx8xxx_port {
++	struct uart_port	port;
++	struct timer_list	timer;
++	unsigned int		old_status;
++};
++
++/* register offsets */
++#define PNX8XXX_LCR		0
++#define PNX8XXX_MCR		0x004
++#define PNX8XXX_BAUD		0x008
++#define PNX8XXX_CFG		0x00c
++#define PNX8XXX_FIFO		0x028
++#define PNX8XXX_ISTAT		0xfe0
++#define PNX8XXX_IEN		0xfe4
++#define PNX8XXX_ICLR		0xfe8
++#define PNX8XXX_ISET		0xfec
++#define PNX8XXX_PD		0xff4
++#define PNX8XXX_MID		0xffc
++
++#define PNX8XXX_UART_LCR_TXBREAK	(1<<30)
++#define PNX8XXX_UART_LCR_PAREVN		0x10000000
++#define PNX8XXX_UART_LCR_PAREN		0x08000000
++#define PNX8XXX_UART_LCR_2STOPB		0x04000000
++#define PNX8XXX_UART_LCR_8BIT		0x01000000
++#define PNX8XXX_UART_LCR_TX_RST		0x00040000
++#define PNX8XXX_UART_LCR_RX_RST		0x00020000
++#define PNX8XXX_UART_LCR_RX_NEXT	0x00010000
++
++#define PNX8XXX_UART_MCR_SCR		0xFF000000
++#define PNX8XXX_UART_MCR_DCD		0x00800000
++#define PNX8XXX_UART_MCR_CTS		0x00100000
++#define PNX8XXX_UART_MCR_LOOP		0x00000010
++#define PNX8XXX_UART_MCR_RTS		0x00000002
++#define PNX8XXX_UART_MCR_DTR		0x00000001
++
++#define PNX8XXX_UART_INT_TX		0x00000080
++#define PNX8XXX_UART_INT_EMPTY		0x00000040
++#define PNX8XXX_UART_INT_RCVTO		0x00000020
++#define PNX8XXX_UART_INT_RX		0x00000010
++#define PNX8XXX_UART_INT_RXOVRN		0x00000008
++#define PNX8XXX_UART_INT_FRERR		0x00000004
++#define PNX8XXX_UART_INT_BREAK		0x00000002
++#define PNX8XXX_UART_INT_PARITY		0x00000001
++#define PNX8XXX_UART_INT_ALLRX		0x0000003F
++#define PNX8XXX_UART_INT_ALLTX		0x000000C0
++
++#define PNX8XXX_UART_FIFO_TXFIFO	0x001F0000
++#define PNX8XXX_UART_FIFO_TXFIFO_STA	(0x1f<<16)
++#define PNX8XXX_UART_FIFO_RXBRK		0x00008000
++#define PNX8XXX_UART_FIFO_RXFE		0x00004000
++#define PNX8XXX_UART_FIFO_RXPAR		0x00002000
++#define PNX8XXX_UART_FIFO_RXFIFO	0x00001F00
++#define PNX8XXX_UART_FIFO_RBRTHR	0x000000FF
++
++#endif
+diff -Naur linux-5.11.orig/include/uapi/linux/serial_core.h linux-5.11/include/uapi/linux/serial_core.h
+--- linux-5.11.orig/include/uapi/linux/serial_core.h	2021-02-15 01:32:24.000000000 +0300
++++ linux-5.11/include/uapi/linux/serial_core.h	2021-02-19 16:08:20.385803993 +0300
+@@ -134,6 +134,8 @@
+ /*Digi jsm */
+ #define PORT_JSM        69
+ 
++#define PORT_PNX8XXX	70
++
+ /* SUN4V Hypervisor Console */
+ #define PORT_SUNHV	72
+ 
