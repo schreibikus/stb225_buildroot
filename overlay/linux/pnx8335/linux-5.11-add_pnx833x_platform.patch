@@ -1550,6 +1550,17 @@ diff -Naur linux-5.11.orig/drivers/tty/serial/Kconfig linux-5.11/drivers/tty/ser
  config SERIAL_HS_LPC32XX
  	tristate "LPC32XX high speed serial port support"
  	depends on ARCH_LPC32XX || COMPILE_TEST
+diff -Naur linux-5.11.orig/drivers/tty/serial/Makefile linux-5.11/drivers/tty/serial/Makefile
+--- linux-5.11.orig/drivers/tty/serial/Makefile	2021-02-15 01:32:24.000000000 +0300
++++ linux-5.11/drivers/tty/serial/Makefile	2021-02-22 14:12:47.808523820 +0300
+@@ -27,6 +27,7 @@
+ obj-$(CONFIG_SERIAL_AMBA_PL011) += amba-pl011.o
+ obj-$(CONFIG_SERIAL_CLPS711X) += clps711x.o
+ obj-$(CONFIG_SERIAL_PXA_NON8250) += pxa.o
++obj-$(CONFIG_SERIAL_PNX8XXX) += pnx8xxx_uart.o
+ obj-$(CONFIG_SERIAL_SA1100) += sa1100.o
+ obj-$(CONFIG_SERIAL_BCM63XX) += bcm63xx_uart.o
+ obj-$(CONFIG_SERIAL_SAMSUNG) += samsung_tty.o
 diff -Naur linux-5.11.orig/drivers/tty/serial/pnx8xxx_uart.c linux-5.11/drivers/tty/serial/pnx8xxx_uart.c
 --- linux-5.11.orig/drivers/tty/serial/pnx8xxx_uart.c	1970-01-01 03:00:00.000000000 +0300
 +++ linux-5.11/drivers/tty/serial/pnx8xxx_uart.c	2021-02-19 15:50:17.076504861 +0300
