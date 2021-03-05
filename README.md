@@ -4,42 +4,42 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-### Currently, the default Linux kernel is version 5.4.101
+### Currently, the default Linux kernel is version 5.10.20
 
-### For using Linux 4.4.258 by default
+### For using Linux 4.4.259 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.4.x"
-* Change "Kernel" -> "Kernel version" to "4.4.258"
+* Change "Kernel" -> "Kernel version" to "4.4.259"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.4-*.patch"
 
-### For using Linux 4.9.258 by default
+### For using Linux 4.9.259 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.9.x"
-* Change "Kernel" -> "Kernel version" to "4.9.258"
+* Change "Kernel" -> "Kernel version" to "4.9.259"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.9-*.patch"
 
-### For using Linux 4.14.222 by default
+### For using Linux 4.14.223 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.14.x"
-* Change "Kernel" -> "Kernel version" to "4.14.222"
+* Change "Kernel" -> "Kernel version" to "4.14.223"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 4.19.177 by default
+### For using Linux 4.19.178 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.19.x"
-* Change "Kernel" -> "Kernel version" to "4.19.177"
+* Change "Kernel" -> "Kernel version" to "4.19.178"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 5.10.19 by default
+### For using Linux 5.4.102 by default
 Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.10.x or later"
-* Change "Kernel" -> "Kernel version" to "5.10.19"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.10-*.patch"
+* Change "Toolchain" -> "Custom kernel headers series" to "5.4.x"
+* Change "Kernel" -> "Kernel version" to "5.4.102"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.4-*.patch"
 
-### For using Linux 5.11.2 by default
+### For using Linux 5.11.3 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "5.10.x or later"
-* Change "Kernel" -> "Kernel version" to "5.11.2"
+* Change "Kernel" -> "Kernel version" to "5.11.3"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.11-*.patch"
 
 ## Build Linux image
