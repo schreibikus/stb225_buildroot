@@ -4,7 +4,7 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-### Currently, the default Linux kernel is version 5.10.34
+### Currently, the default Linux kernel is version 5.10.38
 
 ### For using Linux 4.4.268 by default
 Make the following configuration changes:
@@ -24,28 +24,28 @@ Make the following configuration changes:
 * Change "Kernel" -> "Kernel version" to "4.14.232"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 4.19.189 by default
+### For using Linux 4.19.190 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "4.19.x"
-* Change "Kernel" -> "Kernel version" to "4.19.189"
+* Change "Kernel" -> "Kernel version" to "4.19.190"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-4.19-*.patch"
 
-### For using Linux 5.4.116 by default
+### For using Linux 5.4.120 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "5.4.x"
-* Change "Kernel" -> "Kernel version" to "5.4.116"
+* Change "Kernel" -> "Kernel version" to "5.4.120"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.4-*.patch"
 
-### For using Linux 5.11.18 by default
+### For using Linux 5.11.22 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "5.10.x or later"
-* Change "Kernel" -> "Kernel version" to "5.11.18"
+* Change "Kernel" -> "Kernel version" to "5.11.22"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.11-*.patch"
 
-### For using Linux 5.12.1 by default
+### For using Linux 5.12.5 by default
 Make the following configuration changes:
 * Change "Toolchain" -> "Custom kernel headers series" to "5.10.x or later"
-* Change "Kernel" -> "Kernel version" to "5.12.1"
+* Change "Kernel" -> "Kernel version" to "5.12.5"
 * Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.11-*.patch"
 
 
