@@ -1,13 +1,13 @@
-BUILDROOT_VERSION=2021.08
+BUILDROOT_VERSION=2021.11
 
 all: image
 
-downloads/buildroot/buildroot-$(BUILDROOT_VERSION).tar.bz2:
+downloads/buildroot/buildroot-$(BUILDROOT_VERSION).tar.xz:
 	@mkdir -p $(shell dirname $@)
-	cd $(shell dirname $@) && wget https://buildroot.org/downloads/buildroot-$(BUILDROOT_VERSION).tar.bz2
+	cd $(shell dirname $@) && wget https://buildroot.org/downloads/buildroot-$(BUILDROOT_VERSION).tar.xz
 
-buildroot-$(BUILDROOT_VERSION)/.config:downloads/buildroot/buildroot-$(BUILDROOT_VERSION).tar.bz2
-	@tar xf downloads/buildroot/buildroot-$(BUILDROOT_VERSION).tar.bz2
+buildroot-$(BUILDROOT_VERSION)/.config:downloads/buildroot/buildroot-$(BUILDROOT_VERSION).tar.xz
+	@tar xf downloads/buildroot/buildroot-$(BUILDROOT_VERSION).tar.xz
 	@if [ -d overlay ]; then \
 		echo "Copying overlay tree overlay" ; \
 		rsync -arv --exclude='.svn' overlay/ buildroot-$(BUILDROOT_VERSION)/ ; fi
