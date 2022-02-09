@@ -1,7 +1,7 @@
 diff -Naur linux-5.15.21.orig/drivers/net/ethernet/ip3902.c linux-5.15.21/drivers/net/ethernet/ip3902.c
 --- linux-5.15.21.orig/drivers/net/ethernet/ip3902.c	1970-01-01 03:00:00.000000000 +0300
-+++ linux-5.15.21/drivers/net/ethernet/ip3902.c	2022-02-08 16:24:25.358351434 +0300
-@@ -0,0 +1,1750 @@
++++ linux-5.15.21/drivers/net/ethernet/ip3902.c	2022-02-09 14:05:13.180714966 +0300
+@@ -0,0 +1,1748 @@
 +/* drivers/net/ip3902.c
 + *
 + * Copyright 2008 NXP Semiconductors
@@ -1222,13 +1222,7 @@ diff -Naur linux-5.15.21.orig/drivers/net/ethernet/ip3902.c linux-5.15.21/driver
 +
 +static int ip3902_eth_set_mac_address(struct net_device *ndev, void *addr)
 +{
-+	int i;
-+
-+	for (i = 0; i < 6; i++)
-+	{
-+		/* +2 is for the offset of the HW addr type */
-+		ndev->dev_addr[i] = ((unsigned char *)addr)[i + 2];
-+	}
++	eth_hw_addr_set(ndev, ((unsigned char *)addr + 2));
 +	ip3902_eth_update_mac_address(ndev);
 +	return 0;
 +}
@@ -1436,13 +1430,15 @@ diff -Naur linux-5.15.21.orig/drivers/net/ethernet/ip3902.c linux-5.15.21/driver
 +
 +static int parse_mac_address(struct net_device *ndev)
 +{
++	u8 dev_addr[ETH_ALEN];
 +	int n = sscanf(mac_address, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
-+			&ndev->dev_addr[0], &ndev->dev_addr[1],
-+			&ndev->dev_addr[2], &ndev->dev_addr[3],
-+			&ndev->dev_addr[4], &ndev->dev_addr[5]);
++			&dev_addr[0], &dev_addr[1],
++			&dev_addr[2], &dev_addr[3],
++			&dev_addr[4], &dev_addr[5]);
 +
 +	if (n == 6)
 +	{
++		eth_hw_addr_set(ndev, dev_addr);
 +		return 0;
 +	}
 +
@@ -1476,17 +1472,19 @@ diff -Naur linux-5.15.21.orig/drivers/net/ethernet/ip3902.c linux-5.15.21/driver
 +
 +	if (!mac_address || parse_mac_address(ndev) < 0)
 +	{
++		u8 dev_addr[ETH_ALEN];
 +		unsigned long val;
 +
 +		val = ip3902_read_reg(ndev, SA0_REG);
-+		ndev->dev_addr[5] = (val >> 8) & 255;
-+		ndev->dev_addr[4] = val & 255;
++		dev_addr[5] = (val >> 8) & 255;
++		dev_addr[4] = val & 255;
 +		val = ip3902_read_reg(ndev, SA1_REG);
-+		ndev->dev_addr[3] = (val >> 8) & 255;
-+		ndev->dev_addr[2] = val & 255;
++		dev_addr[3] = (val >> 8) & 255;
++		dev_addr[2] = val & 255;
 +		val = ip3902_read_reg(ndev, SA2_REG);
-+		ndev->dev_addr[1] = (val >> 8) & 255;
-+		ndev->dev_addr[0] = val & 255;
++		dev_addr[1] = (val >> 8) & 255;
++		dev_addr[0] = val & 255;
++		eth_hw_addr_set(ndev, dev_addr);
 +	}
 +
 +	/* Put low-level hardware into reset, and high-level into poweroff */
@@ -1754,7 +1752,7 @@ diff -Naur linux-5.15.21.orig/drivers/net/ethernet/ip3902.c linux-5.15.21/driver
 +MODULE_LICENSE("GPL v2");
 diff -Naur linux-5.15.21.orig/drivers/net/ethernet/Kconfig linux-5.15.21/drivers/net/ethernet/Kconfig
 --- linux-5.15.21.orig/drivers/net/ethernet/Kconfig	2022-02-05 21:21:09.000000000 +0300
-+++ linux-5.15.21/drivers/net/ethernet/Kconfig	2022-02-08 17:24:52.667734297 +0300
++++ linux-5.15.21/drivers/net/ethernet/Kconfig	2022-02-09 14:04:37.268899372 +0300
 @@ -186,4 +186,39 @@
  source "drivers/net/ethernet/xilinx/Kconfig"
  source "drivers/net/ethernet/xircom/Kconfig"
@@ -1797,7 +1795,7 @@ diff -Naur linux-5.15.21.orig/drivers/net/ethernet/Kconfig linux-5.15.21/drivers
  endif # ETHERNET
 diff -Naur linux-5.15.21.orig/drivers/net/ethernet/Makefile linux-5.15.21/drivers/net/ethernet/Makefile
 --- linux-5.15.21.orig/drivers/net/ethernet/Makefile	2022-02-05 21:21:09.000000000 +0300
-+++ linux-5.15.21/drivers/net/ethernet/Makefile	2022-02-08 16:24:25.358351434 +0300
++++ linux-5.15.21/drivers/net/ethernet/Makefile	2022-02-09 14:04:37.268899372 +0300
 @@ -97,3 +97,4 @@
  obj-$(CONFIG_NET_VENDOR_XIRCOM) += xircom/
  obj-$(CONFIG_NET_VENDOR_SYNOPSYS) += synopsys/
