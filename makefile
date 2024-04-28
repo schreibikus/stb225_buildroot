@@ -1,4 +1,4 @@
-BUILDROOT_VERSION=2021.11.1
+BUILDROOT_VERSION=2024.02.1
 
 all: image
 
@@ -16,6 +16,7 @@ buildroot-$(BUILDROOT_VERSION)/.config:downloads/buildroot/buildroot-$(BUILDROOT
 		for PATHFILES in patches/*.patch ; do \
 		    patch -d buildroot-$(BUILDROOT_VERSION) -p1 < $$PATHFILES ; done ; fi
 	@cp configs/buildroot.config buildroot-$(BUILDROOT_VERSION)/.config
+	@make -C buildroot-$(BUILDROOT_VERSION) olddefconfig
 
 image:buildroot-$(BUILDROOT_VERSION)/.config
 	@LC_ALL=C LANG=C make -C buildroot-$(BUILDROOT_VERSION)
