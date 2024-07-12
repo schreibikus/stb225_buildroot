@@ -4,7 +4,7 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-### Currently, the default Linux kernel is version 6.1.98
+### Currently, the default Linux kernel is version 6.6.39
 
 ### For using Linux 5.15.162 by default
 Make the following configuration changes:

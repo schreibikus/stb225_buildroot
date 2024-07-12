@@ -1518,7 +1518,7 @@ diff -Naur linux-6.1.98.orig/drivers/net/ethernet/ip3902.c linux-6.1.98/drivers/
 +	timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("POLL"), CHAR_ARRAY_TO_U32("3902"));
 +#endif
 +
-+	rx_done = ip3902_eth_receive_queue(ip3902_priv->ndev, ip3902_priv, RX_RING_SIZE);
++	rx_done = ip3902_eth_receive_queue(ip3902_priv->ndev, ip3902_priv, budget);
 +	if(rx_done < budget) {
 +#if defined (CONFIG_TIME_DOCTOR)
 +		timeDoctor_Info(TDI_COMMAND(TDI_START, TDI_EVENT), CHAR_ARRAY_TO_U32("CPLT"), CHAR_ARRAY_TO_U32("3902"));
