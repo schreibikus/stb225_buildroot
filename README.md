@@ -4,13 +4,13 @@ The main target of this image: to use STB only as Linux server.
 
 ## How to choose needed the Linux kernel version
 
-### Currently, the default Linux kernel is version 5.15.156
+### Currently, the default Linux kernel is version 6.1.98
 
-### For using Linux 5.10.215 by default
+### For using Linux 5.15.162 by default
 Make the following configuration changes:
-* Change "Toolchain" -> "Custom kernel headers series" to "5.10.x"
-* Change "Kernel" -> "Kernel version" to "5.10.215"
-* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.10-*.patch"
+* Change "Toolchain" -> "Custom kernel headers series" to "5.15.x"
+* Change "Kernel" -> "Kernel version" to "5.15.162"
+* Change "Kernel" -> "Custom kernel patches" to "$(TOPDIR)/linux/pnx8335/linux-5.15-*.patch"
 
 ## Build Linux image
 To build the image run make in this directory.
